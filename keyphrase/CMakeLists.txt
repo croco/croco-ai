@@ -51,6 +51,3 @@ install (TARGETS croco_keyphrase-shared DESTINATION ${EXTENSION_DIR}
                 GROUP_EXECUTE GROUP_WRITE GROUP_READ 
                 WORLD_EXECUTE WORLD_READ)
 
-add_executable(sample-bin ${CMAKE_SOURCE_DIR}/main.cc)
-target_link_libraries(sample-bin ${mecab-shared} ${faiss-shared})
-set_target_properties(sample-bin PROPERTIES OUTPUT_NAME sample)
