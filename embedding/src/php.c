@@ -27,13 +27,18 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_croco_embedding_get, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
 ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_croco_embedding_gets, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, texts, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
 /* }}} */
 
 /* {{{ php_class_methods */
 static const zend_function_entry php_class_methods[] = {
     PHP_ME(croco_embedding_class, __construct,   arginfo_croco_embedding_ctor, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
     PHP_ME(croco_embedding_class, __destruct,    arginfo_croco_embedding_dtor, ZEND_ACC_PUBLIC)
-    PHP_ME(croco_embedding_class, getEmbeddings, arginfo_croco_embedding_get,  ZEND_ACC_PUBLIC)
+    PHP_ME(croco_embedding_class, decode,        arginfo_croco_embedding_get,  ZEND_ACC_PUBLIC)
+    PHP_ME(croco_embedding_class, decodeList,    arginfo_croco_embedding_gets, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 /* }}} */

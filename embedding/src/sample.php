@@ -5,13 +5,25 @@
  */
 
 $embedding = new Croco\Embedding(
-    '/models/embeddinggemma-300M-GGUF/embeddinggemma-300M-Q8_0.gguf'
+    '/models/embeddinggemma-300M-GGUF/embeddinggemma-300M-Q8_0.gguf', 1, 2048
 );
 $texts = [
     "ビジネス文書の使い方「ビジネス文書」では、「招待状・案内状」や「始末書」",
     "「経緯報告書」など、社内・社外（取引先）に向けて作成する文書を生成することができます。"
 ];
-$embeddings = $embedding->getEmbeddings($texts);
+
+$vecs = $embedding->decode($texts[0]);
+echo "\t";
+foreach ($vecs as $idx => $vec) {
+    echo $vec . ", ";
+    if (($idx + 1) % 5 == 0) {
+        echo "\n\t";
+    }
+}
+echo "\n\n";
+
+/*
+$embeddings = $embedding->decodeList($texts);
 foreach ($embeddings as $vecs) {
     echo "\t";
     foreach ($vecs as $idx => $vec) {
@@ -22,3 +34,4 @@ foreach ($embeddings as $vecs) {
     }
     echo "\n\n";
 }
+*/
