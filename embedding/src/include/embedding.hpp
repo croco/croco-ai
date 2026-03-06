@@ -77,8 +77,9 @@ inline void Embedding::loadModel(
     
     // コンテキストのパラメーターを設定
     llama_context_params ctx_params = llama_context_default_params();
-    ctx_params.n_ctx = 512;
-    ctx_params.n_batch = 512;
+    ctx_params.n_ctx = _nTokens; // コンテキストサイズを指定
+    ctx_params.n_batch = _nTokens; // バッチサイズを指定
+    ctx_params.n_ubatch = _nTokens; // 物理バッチサイズを指定
     ctx_params.embeddings = true;  // embeddingモードを有効化
     ctx_params.n_threads = nThreads; // スレッド数を指定
     ctx_params.n_threads_batch = nThreads; // バッチ処理のスレッド
@@ -104,6 +105,60 @@ inline std::vector<float> Embedding::decode(
     const std::string text
 ) {
     std::vector<llama_token> tokens = _tokenize(text);
+    if (tokens.empty()) {
+        return std::vector<float>();
+    }
+
+    // コンテキストを超える場合は分割して平均
+    if (tokens.size() > static_cast<size_t>(_nTokens)) {
+        std::vector<float> sum_embeddings;
+        size_t chunks = 0;
+
+        for (size_t start = 0; start < tokens.size(); start += _nTokens) {
+            size_t end = std::min(start + static_cast<size_t>(_nTokens), tokens.size());
+            std::vector<llama_token> chunk(tokens.begin() + start, tokens.begin() + end);
+
+            llama_batch batch = _toBatches(chunk);
+            std::vector<float> chunk_emb = _batchDecode(batch);
+            llama_batch_free(batch);
+
+            if (chunk_emb.empty()) {
+                continue;
+            }
+
+            if (sum_embeddings.empty()) {
+                sum_embeddings.assign(chunk_emb.size(), 0.0f);
+            }
+
+            for (size_t i = 0; i < chunk_emb.size(); ++i) {
+                sum_embeddings[i] += chunk_emb[i];
+            }
+
+            ++chunks;
+        }
+
+        if (sum_embeddings.empty() || chunks == 0) {
+            return std::vector<float>();
+        }
+
+        for (size_t i = 0; i < sum_embeddings.size(); ++i) {
+            sum_embeddings[i] /= static_cast<float>(chunks);
+        }
+
+        // 最終的にL2正規化
+        double sum = 0.0;
+        for (size_t i = 0; i < sum_embeddings.size(); ++i) {
+            sum += sum_embeddings[i] * sum_embeddings[i];
+        }
+        double norm = sqrt(sum);
+        if (norm > 0.0) {
+            for (size_t i = 0; i < sum_embeddings.size(); ++i) {
+                sum_embeddings[i] /= static_cast<float>(norm);
+            }
+        }
+
+        return sum_embeddings;
+    }
 
     // トークンをバッチに変換
     llama_batch batch = _toBatches(tokens);
@@ -151,10 +206,8 @@ inline std::vector<llama_token> Embedding::_tokenize(
     constexpr auto parse_special = false;
 
     // 初期容量を予測
-    int n_tokens = text.length() + 2 * add_special;
-    if (tokens.capacity() < static_cast<size_t>(n_tokens)) {
-        tokens.reserve(n_tokens);
-    }
+    int n_tokens = static_cast<int>(text.length()) + 2 * add_special;
+    tokens.resize(n_tokens);
     
     const llama_vocab *vocab = llama_model_get_vocab(_model);
     n_tokens = llama_tokenize(
@@ -196,7 +249,7 @@ inline std::vector<llama_token> Embedding::_tokenize(
 llama_batch Embedding::_toBatches(
     const std::vector<llama_token> &tokens
 ) {
-    llama_batch batch = llama_batch_init(_nTokens, 0, 1);
+    llama_batch batch = llama_batch_init(static_cast<int32_t>(tokens.size()), 0, 1);
     const llama_seq_id sequence_id = 0;
     const auto n_tokens = static_cast<int32_t>(tokens.size());
     
