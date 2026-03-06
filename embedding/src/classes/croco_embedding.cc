@@ -61,9 +61,42 @@ PHP_METHOD(croco_embedding_class, __destruct)
 }
 /* }}} */
 
-/* {{{ proto array embedding::getEmbeddings(texts: array)
+/* {{{ proto array embedding::decode(text: string)
  */
-PHP_METHOD(croco_embedding_class, getEmbeddings)
+PHP_METHOD(croco_embedding_class, decode)
+{
+    char *text;
+    size_t textLen = 0;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STRING(text, textLen)
+    ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
+
+    try {
+
+        php_croco_embedding_object *idx_obj = Z_EMBEDDING_P(ZEND_THIS);
+        std::vector<float> embedding = reinterpret_cast<croco::Embedding*>(idx_obj->handle)->decodeList({std::string(text, textLen)})[0];
+
+        array_init(return_value);
+        if (embedding.empty()) {
+            return;
+        }
+
+        for (size_t j = 0; j < embedding.size(); ++j) {
+            zval val;
+            ZVAL_DOUBLE(&val, embedding[j]);
+            add_index_zval(return_value, j, &val);
+        }
+    } catch (const std::exception& e) {
+        zend_throw_exception(zend_ce_error_exception, e.what(), 0);
+        RETURN_FALSE;
+    }
+}
+/* }}} */
+
+/* {{{ proto array embedding::decodeList(texts: array)
+ */
+PHP_METHOD(croco_embedding_class, decodeList)
 {
     zval *array;
 
@@ -84,7 +117,7 @@ PHP_METHOD(croco_embedding_class, getEmbeddings)
         }
 
         php_croco_embedding_object *idx_obj = Z_EMBEDDING_P(ZEND_THIS);
-        std::vector<std::vector<float>> embeddings = reinterpret_cast<croco::Embedding*>(idx_obj->handle)->getEmbeddings(texts);
+        std::vector<std::vector<float>> embeddings = reinterpret_cast<croco::Embedding*>(idx_obj->handle)->decodeList(texts);
 
         array_init(return_value);
         if (embeddings.empty()) {

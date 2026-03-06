@@ -35,7 +35,7 @@ public:
         }
     }
     void loadModel(const char *model, const int32_t nThreads, uint32_t nUBatch);    
-    std::vector<std::vector<float>> getEmbeddings(const std::vector<std::string> &texts);
+    std::vector<std::vector<float>> decodeList(const std::vector<std::string> &texts);
     const uint32_t getBatchSize() { return _nBatch; }
     const uint32_t getUBatchSize() { return _nUBatch; }
 
@@ -110,7 +110,7 @@ inline void Embedding::loadModel(const char *model, const int32_t nThreads=4, ui
  * @param  const std::vector<std::string> &texts テキスト配列
  * @return std::vector<std::vector<float>> 埋め込みベクトル配列
  */
-inline std::vector<std::vector<float>> Embedding::getEmbeddings(const std::vector<std::string> &texts)
+inline std::vector<std::vector<float>> Embedding::decodeList(const std::vector<std::string> &texts)
 {
     std::lock_guard<std::mutex> lock(_mutex);
 

@@ -34,7 +34,8 @@ static inline php_croco_embedding_object *php_croco_embedding_from_obj(zend_obje
 
 PHP_METHOD(croco_embedding_class, __construct);
 PHP_METHOD(croco_embedding_class, __destruct);
-PHP_METHOD(croco_embedding_class, getEmbeddings);
+PHP_METHOD(croco_embedding_class, decode);
+PHP_METHOD(croco_embedding_class, decodeList);
 
 # ifdef __cplusplus
 }   // extern "C"
