@@ -17,7 +17,7 @@ PHP_METHOD(croco_keyphrase_class, __construct)
         php_croco_keyphrase_object *idx_obj = Z_KEYPHRASE_P(ZEND_THIS);
         idx_obj->handle = reinterpret_cast<KeyphraseHandle>(objSent);
     } catch (const std::exception &e) {
-        zend_throw_exception(zend_exception_get_default(), e.what(), 0);
+        zend_throw_exception(zend_ce_exception, e.what(), 0);
         RETURN_FALSE;
     }
 }
@@ -73,7 +73,7 @@ PHP_METHOD(croco_keyphrase_class, extract)
             add_index_zval(return_value, idx, &rVals);
         }
     } catch (const std::exception &e) {
-        zend_throw_exception(zend_exception_get_default(), e.what(), 0);
+        zend_throw_exception(zend_ce_exception, e.what(), 0);
         RETURN_FALSE;
     }
 }         
@@ -106,7 +106,7 @@ PHP_METHOD(croco_keyphrase_class, candidate)
             add_index_zval(return_value, idx, &rPhrase);
         }
     } catch (const std::exception &e) {
-        zend_throw_exception(zend_exception_get_default(), e.what(), 0);
+        zend_throw_exception(zend_ce_exception, e.what(), 0);
         RETURN_FALSE;
     }
 }         
