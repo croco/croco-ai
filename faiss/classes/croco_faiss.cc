@@ -191,6 +191,11 @@ PHP_METHOD(croco_faiss_class, addWithIds)
             if (Z_TYPE_P(node) != IS_LONG) {
                 throw std::invalid_argument("ids elements must be int");
             }
+            if (Z_LVAL_P(node) == -1) {
+                // -1 は faiss が「候補なし」の番兵に使う予約値。登録を許すと
+                // 検索結果から黙って除外され、silent drop が再発する
+                throw std::invalid_argument("id -1 is reserved by faiss as the missing-result sentinel");
+            }
             ids.push_back(Z_LVAL_P(node));
         } ZEND_HASH_FOREACH_END();
 
