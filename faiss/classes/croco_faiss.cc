@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include "croco_faiss.h"
 #include "croco_sort.hpp"
+#include "croco_validate.hpp"
 
 namespace {
 
@@ -31,38 +32,6 @@ std::vector<float> phpArrayToFloatVector(zval *array)
     } ZEND_HASH_FOREACH_END();
 
     return vectors;
-}
-
-/**
- * 配列の要素数と次元から行数を検証・決定する
- *
- * 従来は number = size / d の切り捨てで決めていたため、要素数が次元の倍数で
- * ない配列は 0 行として黙って捨てられていた（faiss の ID と呼び出し側の添字が
- * ずれる原因）。端数が出る入力・行数と合わない number 指定は例外にする。
- */
-zend_long resolveRowCount(size_t size, zend_long number, zend_long dimension)
-{
-    if (dimension <= 0) {
-        // new \Croco\faiss(0) は index_factory を通ってしまうため、ここで弾かないと
-        // size % 0 の 0 除算で PHP プロセスごと落ちる
-        throw std::invalid_argument("index dimension must be positive");
-    }
-    if (0 == size || 0 != (size % static_cast<size_t>(dimension))) {
-        throw std::invalid_argument(
-            "array length (" + std::to_string(size)
-            + ") must be a positive multiple of dimension (" + std::to_string(dimension) + ")");
-    }
-    // 乗算 (number * dimension) は size_t で wrap しうるため、検証は除算結果との比較で行う
-    const zend_long rows = static_cast<zend_long>(size / static_cast<size_t>(dimension));
-    if (0 == number) {
-        return rows;
-    }
-    if (number != rows) {
-        throw std::invalid_argument(
-            "number (" + std::to_string(number) + ") does not match array length ("
-            + std::to_string(size) + ") / dimension (" + std::to_string(dimension) + ")");
-    }
-    return number;
 }
 
 } // namespace
@@ -147,7 +116,7 @@ PHP_METHOD(croco_faiss_class, add)
         faiss::Index *objIdx = reinterpret_cast<faiss::Index*>(faiObj->handle);
 
         std::vector<float> vectors = phpArrayToFloatVector(array);
-        number = resolveRowCount(vectors.size(), number, objIdx->d);
+        number = croco::resolveRowCount(vectors.size(), number, objIdx->d);
         objIdx->add(number, vectors.data());
     } catch (const std::exception& e) {
         zend_throw_exception(zend_ce_error_exception, e.what(), 0);
@@ -176,7 +145,7 @@ PHP_METHOD(croco_faiss_class, addWithIds)
         faiss::Index *objIdx = reinterpret_cast<faiss::Index*>(faiObj->handle);
 
         std::vector<float> vectors = phpArrayToFloatVector(array);
-        number = resolveRowCount(vectors.size(), number, objIdx->d);
+        number = croco::resolveRowCount(vectors.size(), number, objIdx->d);
 
         HashTable *idHt = Z_ARRVAL_P(idArray);
         if (static_cast<zend_long>(zend_hash_num_elements(idHt)) != number) {
@@ -247,7 +216,7 @@ PHP_METHOD(croco_faiss_class, search)
         const faiss::Index *objIdx = reinterpret_cast<const faiss::Index*>(faiObj->handle);
 
         std::vector<float> querys = phpArrayToFloatVector(array);
-        number = resolveRowCount(querys.size(), number, objIdx->d);
+        number = croco::resolveRowCount(querys.size(), number, objIdx->d);
 
         if (k < 0) {
             throw std::invalid_argument("k must be a positive integer");
