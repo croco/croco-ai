@@ -65,9 +65,11 @@ install (TARGETS croco_faiss-shared DESTINATION ${EXTENSION_DIR}
 option(BUILD_TESTING "Build the testing tree." OFF)
 include(CTest)
 if(BUILD_TESTING)
-    add_executable(test_croco_sort ${CMAKE_SOURCE_DIR}/tests/test_croco_sort.cc)
-    target_include_directories(test_croco_sort PRIVATE ${CMAKE_SOURCE_DIR}/classes)
-    # Release 系 configure の -DNDEBUG で assert が消えると中身ゼロで PASS してしまう
-    target_compile_options(test_croco_sort PRIVATE -UNDEBUG)
-    add_test(NAME croco_sort COMMAND test_croco_sort)
+    foreach(name croco_sort croco_validate)
+        add_executable(test_${name} ${CMAKE_SOURCE_DIR}/tests/test_${name}.cc)
+        target_include_directories(test_${name} PRIVATE ${CMAKE_SOURCE_DIR}/classes)
+        # Release 系 configure の -DNDEBUG で assert が消えると中身ゼロで PASS してしまう
+        target_compile_options(test_${name} PRIVATE -UNDEBUG)
+        add_test(NAME ${name} COMMAND test_${name})
+    endforeach()
 endif()
