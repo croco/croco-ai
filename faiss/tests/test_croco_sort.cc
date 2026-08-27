@@ -3,6 +3,7 @@
 // ビルド・実行:
 //   g++ -std=c++17 -Wall -Wextra -I../classes -o test_croco_sort test_croco_sort.cc && ./test_croco_sort
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include "croco_sort.hpp"
 
@@ -13,7 +14,7 @@ int main() {
         int64_t l[5] = {10, 20, 30, 40, 50};
         auto r = croco::FaissStatsFormat(d, l, 5);
         assert(r.size() == 5);
-        // 距離昇順（priority_queue の top が最小距離）
+        // 距離昇順
         assert(r[0].id == 50 && r[4].id == 10);
         for (size_t i = 1; i < r.size(); i++) assert(r[i-1].distance <= r[i].distance);
     }
@@ -67,6 +68,14 @@ int main() {
         auto r = croco::FaissStatsFormat(d, l, 3);
         assert(r.size() == 3);
         assert(r[0].id == 10 && r[1].id == 20 && r[2].id == 30);
+    }
+    // 9) NaN 距離は末尾に送られる（strict weak ordering の維持）
+    {
+        float d[2] = {std::nanf(""), 1.f};
+        int64_t l[2] = {1, 2};
+        auto r = croco::FaissStatsFormat(d, l, 2);
+        assert(r.size() == 2);
+        assert(r[0].id == 2 && r[1].id == 1);
     }
     puts("all tests passed");
     return 0;

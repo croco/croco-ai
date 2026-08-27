@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
@@ -59,6 +60,10 @@ inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64
     // L2 等の距離系メトリックは値が小さいほど良いので昇順、
     // 内積等の類似度系メトリックは値が大きいほど良いので降順に並べる
     std::sort(result.begin(), result.end(), [ascending](const stats_t &a, const stats_t &b) {
+        // NaN は常に末尾へ送る。素通しすると比較子が strict weak ordering を
+        // 満たさず std::sort が未定義動作になる
+        if (std::isnan(a.distance)) return false;
+        if (std::isnan(b.distance)) return true;
         if (a.distance != b.distance) {
             return ascending ? a.distance < b.distance : a.distance > b.distance;
         }

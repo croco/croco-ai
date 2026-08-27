@@ -256,6 +256,11 @@ PHP_METHOD(croco_faiss_class, search)
             float x = std::sqrt(objIdx->ntotal);
             k = static_cast<zend_long>(x + 0.5f);
         }
+        if (objIdx->ntotal < 0) {
+            // 破損・細工されたインデックスファイル由来。クランプで k が負になる前に
+            // 原因を指したメッセージで弾く
+            throw std::invalid_argument("index is corrupted (negative ntotal)");
+        }
         if (k > objIdx->ntotal) {
             // 番兵 (-1) は結果から除外するため k > ntotal は k = ntotal と同一の結果になる。
             // クランプしておくことで巨大な k による n * k の確保・乗算オーバーフローも防ぐ
