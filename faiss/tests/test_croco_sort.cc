@@ -60,6 +60,14 @@ int main() {
         assert(r.size() == 3);
         assert(r[0].id == 2 && r[1].id == 3 && r[2].id == 1);
     }
+    // 8) 同値距離は id 昇順で決定的に並ぶ
+    {
+        float d[3] = {5.f, 5.f, 5.f};
+        int64_t l[3] = {30, 10, 20};
+        auto r = croco::FaissStatsFormat(d, l, 3);
+        assert(r.size() == 3);
+        assert(r[0].id == 10 && r[1].id == 20 && r[2].id == 30);
+    }
     puts("all tests passed");
     return 0;
 }

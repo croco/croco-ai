@@ -59,11 +59,15 @@ install (TARGETS croco_faiss-shared DESTINATION ${EXTENSION_DIR}
     PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                 GROUP_EXECUTE GROUP_WRITE GROUP_READ 
                 WORLD_EXECUTE WORLD_READ)
-# ホスト単体テスト（zend / faiss 非依存、g++ 単体でビルド可能）
-# cmake -DBUILD_TESTING=ON . && make test_croco_sort && ctest
+# ホスト単体テスト（zend / faiss 非依存、g++ 単体でもビルド可能）
+# include(CTest) の既定は ON のため、本番の拡張ビルドに混ざらないよう明示的に OFF にする。
+# 実行: cmake -DBUILD_TESTING=ON . && make test_croco_sort && ctest
+option(BUILD_TESTING "Build the testing tree." OFF)
 include(CTest)
 if(BUILD_TESTING)
     add_executable(test_croco_sort ${CMAKE_SOURCE_DIR}/tests/test_croco_sort.cc)
     target_include_directories(test_croco_sort PRIVATE ${CMAKE_SOURCE_DIR}/classes)
+    # Release 系 configure の -DNDEBUG で assert が消えると中身ゼロで PASS してしまう
+    target_compile_options(test_croco_sort PRIVATE -UNDEBUG)
     add_test(NAME croco_sort COMMAND test_croco_sort)
 endif()

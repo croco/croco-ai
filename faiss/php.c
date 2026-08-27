@@ -17,7 +17,7 @@ zend_class_entry *croco_faiss_ce;
 /* {{{ arginfo */
 ZEND_BEGIN_ARG_INFO_EX(arginfo_croco_faiss_ctor, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, dimension, IS_LONG, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, description, IS_STRING, 0, "Flat")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, description, IS_STRING, 0, "\"Flat\"")
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, metric, IS_LONG, 0, "\\Croco\\Faiss\\METRIC_L2")
 ZEND_END_ARG_INFO()
 

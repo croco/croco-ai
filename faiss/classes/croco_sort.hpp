@@ -43,7 +43,7 @@ inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64
 
     std::vector<stats_t> result;
     result.reserve(sumidx.size());
-    for (auto row : sumidx) {
+    for (const auto &row : sumidx) {
         struct _stats val;
         val.id = row.first;
         val.count = row.second.size();
@@ -59,7 +59,10 @@ inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64
     // L2 等の距離系メトリックは値が小さいほど良いので昇順、
     // 内積等の類似度系メトリックは値が大きいほど良いので降順に並べる
     std::sort(result.begin(), result.end(), [ascending](const stats_t &a, const stats_t &b) {
-        return ascending ? a.distance < b.distance : a.distance > b.distance;
+        if (a.distance != b.distance) {
+            return ascending ? a.distance < b.distance : a.distance > b.distance;
+        }
+        return a.id < b.id; // 同値距離の順序を決定的にする（unordered_map の走査順に依存させない）
     });
 
     return result;
