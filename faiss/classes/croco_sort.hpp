@@ -28,8 +28,10 @@ std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *lab
 {
     std::unordered_map<int64_t, std::vector<size_t>> sumidx;
     for (size_t idx=0; idx < size; idx++) {
-        if (labels[idx] < 0) {
-            continue; // k > ntotal のとき faiss が埋める番兵 (-1) は結果に含めない
+        if (labels[idx] == -1) {
+            // 候補が k 件に満たないとき faiss が埋める番兵は -1 固定。
+            // < 0 で判定すると addWithIds() で負の ID を登録したベクトルまで落ちる
+            continue;
         }
         if (sumidx.find(labels[idx]) == sumidx.end()) {
             std::vector<size_t> idxs = { idx };

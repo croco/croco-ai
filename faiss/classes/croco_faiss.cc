@@ -19,6 +19,7 @@ std::vector<float> phpArrayToFloatVector(zval *array)
 
     zval *node;
     ZEND_HASH_FOREACH_VAL(ht, node) {
+        ZVAL_DEREF(node); // foreach (... as &$v) 後の配列などに残る参照を実体まで解決する
         if (Z_TYPE_P(node) == IS_DOUBLE) {
             vectors.push_back(static_cast<float>(Z_DVAL_P(node)));
         } else if (Z_TYPE_P(node) == IS_LONG) {
@@ -40,6 +41,11 @@ std::vector<float> phpArrayToFloatVector(zval *array)
  */
 zend_long resolveRowCount(size_t size, zend_long number, zend_long dimension)
 {
+    if (dimension <= 0) {
+        // new \Croco\faiss(0) は index_factory を通ってしまうため、ここで弾かないと
+        // size % 0 の 0 除算で PHP プロセスごと落ちる
+        throw std::invalid_argument("index dimension must be positive");
+    }
     if (0 == size || 0 != (size % static_cast<size_t>(dimension))) {
         throw std::invalid_argument(
             "array length (" + std::to_string(size)
@@ -179,6 +185,7 @@ PHP_METHOD(croco_faiss_class, addWithIds)
         ids.reserve(number);
         zval *node;
         ZEND_HASH_FOREACH_VAL(idHt, node) {
+            ZVAL_DEREF(node);
             if (Z_TYPE_P(node) != IS_LONG) {
                 throw std::invalid_argument("ids elements must be int");
             }
@@ -217,7 +224,7 @@ PHP_METHOD(croco_faiss_class, search)
 {
     zval *array;
     zend_long k = 0;
-    zend_long format = 0;
+    zend_long format = 0; // 予約引数（現状未実装。出力は常に Rank/ID/Count/Distance の配列）
     zend_long number = 0;
     ZEND_PARSE_PARAMETERS_START(1, 4)
         Z_PARAM_ARRAY(array)
@@ -245,6 +252,11 @@ PHP_METHOD(croco_faiss_class, search)
             // 空インデックス（ntotal == 0）への検索は空の結果を返す
             array_init(return_value);
             return;
+        }
+        if (k > objIdx->ntotal) {
+            // 番兵 (-1) は結果から除外するため k > ntotal は k = ntotal と同一の結果になる。
+            // クランプしておくことで巨大な k による n * k の確保・乗算オーバーフローも防ぐ
+            k = objIdx->ntotal;
         }
 
         // faiss は n * k 件書き込む。従来は k 件の VLA しか確保しておらず、
