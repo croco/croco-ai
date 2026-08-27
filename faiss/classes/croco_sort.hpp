@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <queue>
 #include <unordered_map>
 #include <vector>
@@ -7,7 +8,7 @@
 namespace croco {
 
 typedef struct _stats {
-    int id;
+    int64_t id;
     int count;
     float distance;
     bool operator<(const struct _stats &stats) const  {
@@ -15,7 +16,7 @@ typedef struct _stats {
     }
 } stats_t;
 
-std::vector<stats_t> FaissStatsFormat(float *distances, long *labels, size_t size);
+std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *labels, size_t size);
 
 /**
  * get stats format
@@ -23,10 +24,13 @@ std::vector<stats_t> FaissStatsFormat(float *distances, long *labels, size_t siz
  * @access public
  * @return Stats*
  */
-std::vector<stats_t> FaissStatsFormat(float *distances, long *labels, size_t size)
+std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *labels, size_t size)
 {
-    std::unordered_map<long, std::vector<size_t>> sumidx;
+    std::unordered_map<int64_t, std::vector<size_t>> sumidx;
     for (size_t idx=0; idx < size; idx++) {
+        if (labels[idx] < 0) {
+            continue; // k > ntotal のとき faiss が埋める番兵 (-1) は結果に含めない
+        }
         if (sumidx.find(labels[idx]) == sumidx.end()) {
             std::vector<size_t> idxs = { idx };
             sumidx.insert(std::make_pair(labels[idx], idxs));
@@ -49,13 +53,11 @@ std::vector<stats_t> FaissStatsFormat(float *distances, long *labels, size_t siz
         queue.push(val);
     }
 
+    // pop() のたびに size() が縮むため for (idx < queue.size()) では半分しか取り出せない。
+    // 空になるまで回す
     std::vector<stats_t> result;
-    for (size_t idx=0; idx < queue.size(); idx++) {
-        result.push_back({
-            id:queue.top().id,
-            count:queue.top().count,
-            distance:queue.top().distance
-        });
+    while (!queue.empty()) {
+        result.push_back(queue.top());
         queue.pop();
     }
 
