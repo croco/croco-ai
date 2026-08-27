@@ -61,7 +61,7 @@ install (TARGETS croco_faiss-shared DESTINATION ${EXTENSION_DIR}
                 WORLD_EXECUTE WORLD_READ)
 # ホスト単体テスト（zend / faiss 非依存、g++ 単体でもビルド可能）
 # include(CTest) の既定は ON のため、本番の拡張ビルドに混ざらないよう明示的に OFF にする。
-# 実行: cmake -DBUILD_TESTING=ON . && make test_croco_sort && ctest
+# 実行: cmake -DBUILD_TESTING=ON . && make test_croco_sort test_croco_validate && ctest
 option(BUILD_TESTING "Build the testing tree." OFF)
 include(CTest)
 if(BUILD_TESTING)
