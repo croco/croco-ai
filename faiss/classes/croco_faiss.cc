@@ -51,10 +51,12 @@ zend_long resolveRowCount(size_t size, zend_long number, zend_long dimension)
             "array length (" + std::to_string(size)
             + ") must be a positive multiple of dimension (" + std::to_string(dimension) + ")");
     }
+    // 乗算 (number * dimension) は size_t で wrap しうるため、検証は除算結果との比較で行う
+    const zend_long rows = static_cast<zend_long>(size / static_cast<size_t>(dimension));
     if (0 == number) {
-        return static_cast<zend_long>(size / static_cast<size_t>(dimension));
+        return rows;
     }
-    if (number < 0 || static_cast<size_t>(number) * static_cast<size_t>(dimension) != size) {
+    if (number != rows) {
         throw std::invalid_argument(
             "number (" + std::to_string(number) + ") does not match array length ("
             + std::to_string(size) + ") / dimension (" + std::to_string(dimension) + ")");
