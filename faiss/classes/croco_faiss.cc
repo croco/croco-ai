@@ -252,14 +252,14 @@ PHP_METHOD(croco_faiss_class, search)
         if (k < 0) {
             throw std::invalid_argument("k must be a positive integer");
         }
+        if (objIdx->ntotal < 0) {
+            // 破損・細工されたインデックスファイル由来。sqrt(負) の NaN→整数キャスト
+            // (UB) やクランプで k が負になる前に、原因を指したメッセージで弾く
+            throw std::invalid_argument("index is corrupted (negative ntotal)");
+        }
         if (0 == k) {
             float x = std::sqrt(objIdx->ntotal);
             k = static_cast<zend_long>(x + 0.5f);
-        }
-        if (objIdx->ntotal < 0) {
-            // 破損・細工されたインデックスファイル由来。クランプで k が負になる前に
-            // 原因を指したメッセージで弾く
-            throw std::invalid_argument("index is corrupted (negative ntotal)");
         }
         if (k > objIdx->ntotal) {
             // 番兵 (-1) は結果から除外するため k > ntotal は k = ntotal と同一の結果になる。

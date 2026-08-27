@@ -61,8 +61,10 @@ inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64
     // 内積等の類似度系メトリックは値が大きいほど良いので降順に並べる
     std::sort(result.begin(), result.end(), [ascending](const stats_t &a, const stats_t &b) {
         // NaN は常に末尾へ送る。素通しすると比較子が strict weak ordering を
-        // 満たさず std::sort が未定義動作になる
-        if (std::isnan(a.distance)) return false;
+        // 満たさず std::sort が未定義動作になる。NaN 同士は id で決定的に並べる
+        if (std::isnan(a.distance)) {
+            return std::isnan(b.distance) ? a.id < b.id : false;
+        }
         if (std::isnan(b.distance)) return true;
         if (a.distance != b.distance) {
             return ascending ? a.distance < b.distance : a.distance > b.distance;

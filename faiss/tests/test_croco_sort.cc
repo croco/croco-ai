@@ -77,6 +77,14 @@ int main() {
         assert(r.size() == 2);
         assert(r[0].id == 2 && r[1].id == 1);
     }
+    // 10) 複数 NaN も id 昇順で末尾に決定的に並ぶ
+    {
+        float d[3] = {std::nanf(""), 1.f, std::nanf("")};
+        int64_t l[3] = {9, 2, 5};
+        auto r = croco::FaissStatsFormat(d, l, 3);
+        assert(r.size() == 3);
+        assert(r[0].id == 2 && r[1].id == 5 && r[2].id == 9);
+    }
     puts("all tests passed");
     return 0;
 }
