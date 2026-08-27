@@ -16,7 +16,7 @@ typedef struct _stats {
     }
 } stats_t;
 
-std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *labels, size_t size);
+inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *labels, size_t size);
 
 /**
  * get stats format
@@ -24,7 +24,7 @@ std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *lab
  * @access public
  * @return Stats*
  */
-std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *labels, size_t size)
+inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *labels, size_t size)
 {
     std::unordered_map<int64_t, std::vector<size_t>> sumidx;
     for (size_t idx=0; idx < size; idx++) {

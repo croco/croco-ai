@@ -248,19 +248,22 @@ PHP_METHOD(croco_faiss_class, search)
             float x = std::sqrt(objIdx->ntotal);
             k = static_cast<zend_long>(x + 0.5f);
         }
-        if (0 == k) {
-            // 空インデックス（ntotal == 0）への検索は空の結果を返す
-            array_init(return_value);
-            return;
-        }
         if (k > objIdx->ntotal) {
             // 番兵 (-1) は結果から除外するため k > ntotal は k = ntotal と同一の結果になる。
             // クランプしておくことで巨大な k による n * k の確保・乗算オーバーフローも防ぐ
             k = objIdx->ntotal;
         }
+        if (0 == k) {
+            // 空インデックス（ntotal == 0）への検索は、k の指定有無によらず空の結果を返す
+            // （クランプ後に判定することで k 明示指定の経路でも faiss の k > 0 要求を踏まない）
+            array_init(return_value);
+            return;
+        }
 
         // faiss は n * k 件書き込む。従来は k 件の VLA しか確保しておらず、
-        // n >= 2 でスタックを踏み越え、n == 0 では未初期化のスタックを返していた
+        // n >= 2 でスタックを踏み越え、n == 0 では未初期化のスタックを返していた。
+        // なお n >= 2（複数クエリ）の結果はクエリ別に分かれず、ラベル単位で集約した
+        // 1 本のランキングになる（Count = 何本のクエリでヒットしたか）
         faiss::idx_t n = number;
         size_t total = static_cast<size_t>(n) * static_cast<size_t>(k);
         std::vector<float> distances(total);
