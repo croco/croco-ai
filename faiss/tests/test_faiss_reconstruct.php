@@ -25,6 +25,7 @@ ok($match, 'reconstruct: 投入したベクトルが復元される');
 
 throws(fn() => $idx->reconstruct(100), 'reconstruct: 範囲外 key は例外');
 throws(fn() => $idx->reconstruct(PHP_INT_MAX), 'reconstruct: PHP_INT_MAX は例外（faiss 内部の int64 wrap 防御）');
+throws(fn() => $idx->reconstruct(-1), 'reconstruct: 負の key は例外（下側境界）');
 throws(fn() => $idx->reconstruct(0, []), 'reconstruct: 旧 2 引数呼び出しは ArgumentCountError',
     ArgumentCountError::class);
 
