@@ -14,18 +14,22 @@ function ok(bool $cond, string $name): void
     }
 }
 
-function throws(callable $fn, string $name, string $class = ErrorException::class): void
+function throws(callable $fn, string $name, string $class = ErrorException::class, ?string $needle = null): void
 {
     try {
         $fn();
         $GLOBALS['__test_failures']++;
         echo "FAIL - {$name}（例外が発生しなかった）\n";
     } catch (Throwable $e) {
-        if ($e instanceof $class) {
-            echo "ok - {$name}\n";
-        } else {
+        if (!($e instanceof $class)) {
             $GLOBALS['__test_failures']++;
             echo "FAIL - {$name}（期待 {$class}、実際 " . get_class($e) . ": {$e->getMessage()}）\n";
+        } elseif ($needle !== null && !str_contains($e->getMessage(), $needle)) {
+            // 例外クラスだけでは検証経路を取り違えるため、メッセージ断片でも突き合わせる
+            $GLOBALS['__test_failures']++;
+            echo "FAIL - {$name}（メッセージに '{$needle}' を含まない: {$e->getMessage()}）\n";
+        } else {
+            echo "ok - {$name}\n";
         }
     }
 }
