@@ -338,6 +338,11 @@ PHP_METHOD(croco_faiss_class, reconstruct)
         if (objIdx->d <= 0) {
             throw std::invalid_argument("index dimension must be positive");
         }
+        if (key == ZEND_LONG_MAX) {
+            // faiss 内部の境界チェック (i0 + ni <= ntotal) は int64 の key + 1 が
+            // wrap すると通過してしまう。wrap する唯一の値をここで弾く
+            throw std::invalid_argument("key (" + std::to_string(key) + ") is out of range");
+        }
 
         // faiss は d 個の float を書き込む。従来は呼び出し側の PHP 配列の要素数ぶんしか
         // 確保しておらず、d に満たない配列でヒープを踏み越えていた。さらに引数が
