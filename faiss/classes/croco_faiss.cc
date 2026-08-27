@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cstdint>
 #include <stdexcept>
 #include "croco_faiss.h"
 #include "croco_sort.hpp"
@@ -272,13 +273,21 @@ PHP_METHOD(croco_faiss_class, search)
         // なお n >= 2（複数クエリ）の結果はクエリ別に分かれず、ラベル単位で集約した
         // 1 本のランキングになる（Count = 何本のクエリでヒットしたか）
         faiss::idx_t n = number;
+        if (static_cast<size_t>(n) > SIZE_MAX / static_cast<size_t>(k)) {
+            // 通常運用では到達しない（n は実在配列由来・k は ntotal クランプ済み）が、
+            // 破損・細工されたインデックスファイルの ntotal 由来で k が極端に
+            // 大きい場合に n * k が wrap するのを防ぐ
+            throw std::invalid_argument("n * k overflows size_t");
+        }
         size_t total = static_cast<size_t>(n) * static_cast<size_t>(k);
         std::vector<float> distances(total);
         std::vector<faiss::idx_t> labels(total);
 
         objIdx->search(n, querys.data(), k, distances.data(), labels.data());
 
-        std::vector<croco::stats_t> stats = croco::FaissStatsFormat(distances.data(), labels.data(), total);
+        // L2 等の距離系は昇順（近い順）、内積等の類似度系は降順（似ている順）
+        const bool ascending = !faiss::is_similarity_metric(objIdx->metric_type);
+        std::vector<croco::stats_t> stats = croco::FaissStatsFormat(distances.data(), labels.data(), total, ascending);
         zend_long idx = 0;
         array_init(return_value);
         for (const auto& stat : stats) {

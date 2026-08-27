@@ -6,6 +6,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <faiss/MetricType.h>
 #include <faiss/index_factory.h>
 #include <faiss/index_io.h>
 

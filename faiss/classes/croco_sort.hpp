@@ -1,7 +1,7 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
-#include <queue>
 #include <unordered_map>
 #include <vector>
 
@@ -11,12 +11,9 @@ typedef struct _stats {
     int64_t id;
     int count;
     float distance;
-    bool operator<(const struct _stats &stats) const  {
-        return distance > stats.distance;
-    }
 } stats_t;
 
-inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *labels, size_t size);
+inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *labels, size_t size, bool ascending = true);
 
 /**
  * get stats format
@@ -24,13 +21,16 @@ inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64
  * @access public
  * @return Stats*
  */
-inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *labels, size_t size)
+inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64_t *labels, size_t size, bool ascending)
 {
     std::unordered_map<int64_t, std::vector<size_t>> sumidx;
     for (size_t idx=0; idx < size; idx++) {
         if (labels[idx] == -1) {
             // 候補が k 件に満たないとき faiss が埋める番兵は -1 固定。
-            // < 0 で判定すると addWithIds() で負の ID を登録したベクトルまで落ちる
+            // < 0 で判定すると addWithIds() で負の ID を登録したベクトルまで落ちる。
+            // 制約: 他ツール（Python 版 faiss 等）が ID -1 で登録したインデックスを
+            // readIndex()/importIndex() で読み込んだ場合、そのベクトルは番兵と
+            // 区別できずここで落ちる（登録側では addWithIds() が -1 を拒否する）
             continue;
         }
         if (sumidx.find(labels[idx]) == sumidx.end()) {
@@ -41,7 +41,8 @@ inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64
         }
     }
 
-    std::priority_queue<struct _stats> queue;
+    std::vector<stats_t> result;
+    result.reserve(sumidx.size());
     for (auto row : sumidx) {
         struct _stats val;
         val.id = row.first;
@@ -52,16 +53,14 @@ inline std::vector<stats_t> FaissStatsFormat(const float *distances, const int64
             distance += distances[idx];
         }
         val.distance = distance / val.count;
-        queue.push(val);
+        result.push_back(val);
     }
 
-    // pop() のたびに size() が縮むため for (idx < queue.size()) では半分しか取り出せない。
-    // 空になるまで回す
-    std::vector<stats_t> result;
-    while (!queue.empty()) {
-        result.push_back(queue.top());
-        queue.pop();
-    }
+    // L2 等の距離系メトリックは値が小さいほど良いので昇順、
+    // 内積等の類似度系メトリックは値が大きいほど良いので降順に並べる
+    std::sort(result.begin(), result.end(), [ascending](const stats_t &a, const stats_t &b) {
+        return ascending ? a.distance < b.distance : a.distance > b.distance;
+    });
 
     return result;
 }

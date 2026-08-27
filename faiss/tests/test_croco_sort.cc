@@ -52,6 +52,14 @@ int main() {
         auto r = croco::FaissStatsFormat(d, l, 2);
         assert(r.size() == 1 && r[0].id == -5);
     }
+    // 7) 類似度系メトリック向けの降順（ascending = false）
+    {
+        float d[3] = {1.f, 3.f, 2.f};
+        int64_t l[3] = {1, 2, 3};
+        auto r = croco::FaissStatsFormat(d, l, 3, false);
+        assert(r.size() == 3);
+        assert(r[0].id == 2 && r[1].id == 3 && r[2].id == 1);
+    }
     puts("all tests passed");
     return 0;
 }
