@@ -368,7 +368,10 @@ inline bool Phrases::_filtering(const phrase_t &phrase, int minimum_length, size
  *
  * 所要時間は n だけでなく offsets の密度（同じフレーズの出現回数）で決まる。
  * 本番の実データで n=1,609（37,369 文字）は上限なしでも 7.9s / 346MB で通るので、
- * 上限に掛かって重くなるのは繰り返しの多い巨大ページだけ
+ * 上限に掛かって重くなるのは繰り返しの多い巨大ページだけ。
+ *
+ * この上限が要るのはランク付けをする extract() の経路だけなので、candidate() は
+ * 0（無制限）を渡して素の候補集合を返す（croco_keyphrase.cc 参照）
  *
  * @access private
  * @param  candidate_t &result
