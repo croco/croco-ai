@@ -74,8 +74,10 @@ private:
  * トピック（フレーズ）の取得
  *
  * @access public
- * @param  std::vector<Lines::line_t> lines
- * @return std::vector<std::string>
+ * @param  std::vector<Lines::line_t> lines  値渡し。呼び出し側は std::move で渡すこと
+ * @param  size_t maximum_candidates  候補数の上限。0 なら無制限。
+ *                                    MAXIMUM_CANDIDATES / NO_CANDIDATE_LIMIT を渡す
+ * @return candidate_t
  */
 inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines, size_t maximum_candidates)
 {
