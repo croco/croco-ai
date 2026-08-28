@@ -39,6 +39,26 @@ $candidates = $keyphrase->candidate('一定の条件さえ満たしていれば�
 $joined = array_values(array_filter($candidates, static fn ($c) => str_contains($c, ')')));
 ok($joined === [], '未知語の記号 `)。` を含む候補が残らない: ' . json_encode($joined, JSON_UNESCAPED_UNICODE));
 
+// ── 数量だけのフレーズは候補にしない ──
+// mecab は 3,000,000円 を 3 / , / 000 / , / 000 / 円 と切り、`,` は辞書に無いので
+// 未知語（名詞,サ変接続）になる。記号として分断された結果 `000円` が残っていた (#7)
+$candidates = $keyphrase->candidate('開業資金は参考書費用も含めて3,000,000円かかる。');
+$fragments = array_values(array_filter($candidates, static fn ($c) => str_contains($c, '000')));
+ok($fragments === [], '桁区切りの金額から壊れた断片が残らない: ' . json_encode($fragments, JSON_UNESCAPED_UNICODE));
+ok(in_array('開業資金', $candidates, true), '同じ文の内容語は候補に残る');
+
+$candidates = $keyphrase->candidate('試験は2016年度から年1回の実施になった。');
+ok(!in_array('2016年度', $candidates, true), '数詞と助数詞だけの 2016年度 は候補にしない');
+
+// 内容語が 1 つでも混じっていれば残す（地名・規格として意味を持つ）。
+// 名詞列のどこで切れるかは mecab 任せなので（`国道246号沿い` まで 1 語になる）、
+// 境界そのものではなく「数量を含む候補が残ること」を見る
+$candidates = $keyphrase->candidate('国道246号沿いの笹塚1丁目に出店する。');
+$kept = array_values(array_filter($candidates, static fn ($c) => str_contains($c, '246')));
+ok($kept !== [], '内容語混じりの 国道246号 は候補に残る: ' . json_encode($kept, JSON_UNESCAPED_UNICODE));
+$kept = array_values(array_filter($candidates, static fn ($c) => str_contains($c, '丁目')));
+ok($kept !== [], '内容語混じりの 笹塚1丁目 は候補に残る: ' . json_encode($kept, JSON_UNESCAPED_UNICODE));
+
 // ── extract() まで通して主題語が返る ──
 $text = '調理師免許は調理師法に定められた国家資格。'
       . "\n" . '調理師免許がなくても飲食店で料理を出すことは可能だが、調理師と名乗れるのは免許を持った者だけ。'
