@@ -32,6 +32,7 @@ static croco::Lines::line_t makeLine(const std::vector<std::string> &words,
     return line;
 }
 
+// 上限と無関係なケース用。既定の上限（MAXIMUM_CANDIDATES）を明示して渡す
 static std::vector<std::string> keysOf(const std::vector<croco::Lines::line_t> &lines)
 {
     croco::Phrases phrases;

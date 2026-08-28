@@ -106,7 +106,6 @@ inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines, siz
         }
     }
 
-    std::vector<std::string> keys;
     candidate_t result;
     for (auto &key : allKeys) {
         auto &phrase = map.at(key);
@@ -269,6 +268,10 @@ inline bool Phrases::_isAllNumeric(const std::vector<unsigned short> &poss)
 
 /**
  * 記号だけで構成された語の判定
+ *
+ * 空文字も true を返す。「記号だから」ではなく、内容語として扱えないものを
+ * _isValid で落として名詞列を分断させるため。mecab の surface が空になることは
+ * 実質ないが、この関数を別用途で使い回すときは意味が違う点に注意
  *
  * @access private
  * @param  const std::string &word
