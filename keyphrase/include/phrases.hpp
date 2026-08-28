@@ -42,7 +42,7 @@ public:
     } candidate_t;
 
 public:
-    candidate_t parse(std::vector<Lines::line_t> lines, size_t maximum_candidates = 2000);
+    candidate_t parse(std::vector<Lines::line_t> lines, size_t maximum_candidates = 1200);
 
 private:
     bool _isValid(const unsigned short posid, const std::string &word);
@@ -347,15 +347,28 @@ inline bool Phrases::_filtering(const phrase_t &phrase, int minimum_length, size
  *
  * 逆に、上限に掛かった入力では上位の顔ぶれも変わる。実測（65,723 文字・n=1,847 を
  * 1,200 で切った場合）で top-12 の一致は 7/12 だった。つまりこの上限は「結果が
- * 変わらない線」ではなく「実行環境が壊れない最大」で決めるもので、既定値は
- * Lambda 1024MB / 0.579 vCPU 相当での実測から選んでいる:
+ * 変わらない線」ではなく「実行環境が壊れない最大」で決めるもの。
  *
- *   n=1,200  ピーク 285MB  extract  42.8s
- *   n=2,000  ピーク 530MB  extract 115.8s   ← 既定値
+ * 効いてくる制限は Lambda の Timeout（480s）ではなく、呼び出し側が
+ * task-chiyoco の analysis/var/task/app.php:16 で入れている
+ * max_execution_time = 180 のほう。同じプロセスで getContents → kagemusha
+ * （java の子プロセス）→ この extract → getSimilarity（全文の embedding）を
+ * 順に回すので、180 秒はその合計に対する枠になる (croco-ai#8 の codex レビュー指摘)。
+ *
+ * Lambda 1024MB / 0.579 vCPU 相当で、本番の最大級の入力（89,315 文字）を測った値:
+ *
+ *   n=1,200  ピーク 285MB  extract  43.5s   ← 既定値
+ *   n=2,000  ピーク 530MB  extract 115.8s
  *   n=2,400  ピーク 745MB  extract 191.4s
+ *   上限なし n=3,421  ピーク 1,299MB  extract 365.1s
  *
- * 2,000 なら 65,723 文字（n=1,847）までは無傷で通り、本番の解析対象 2,132 件の
- * サンプルで上限に掛かるのは 2 件（0.09%、約 180KB 超）だけになる
+ * 修正前の同じ入力が 31.3s / 807MB だったので、1,200 なら時間は +12s に収まり、
+ * メモリは 1/3 になる。2,000 は +84s で、getSimilarity の実測が無いまま
+ * 180 秒に賭ける形になるため採らない。
+ *
+ * 所要時間は n だけでなく offsets の密度（同じフレーズの出現回数）で決まる。
+ * 本番の実データで n=1,609（37,369 文字）は上限なしでも 7.9s / 346MB で通るので、
+ * 上限に掛かって重くなるのは繰り返しの多い巨大ページだけ
  *
  * @access private
  * @param  candidate_t &result
