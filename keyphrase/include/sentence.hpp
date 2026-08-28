@@ -71,13 +71,20 @@ inline Sentence::Sentences Sentence::parse(std::string text)
                 }
             } // if (node->stat != MECAB_BOS_NODE && node->stat != MECAB_EOS_NODE)
         } // for (; node; node = node->next)
+
+        // 行末でも切る。'\n' で分割して行ごとに tagger へ渡している以上、行はすでに
+        // 解析の境界になっている。ここで切らないと wordRow が行をまたいで積み上がり、
+        // 句点で終わらない行（見出しなど）が次の行の本文と 1 センテンスに繋がる。
+        // Phrases が連続する名詞列をフレーズにするため、見出し末尾と本文先頭が
+        // くっついた `勉強コスト独学` のような候補が生まれていた (#7)
+        if (wordRow.size()) {
+            result.wordLines.push_back(wordRow);
+            result.posLines.push_back(posRow);
+            wordRow.clear();
+            posRow.clear();
+        }
     }
-    if (wordRow.size()) {
-        result.wordLines.push_back(wordRow);
-        result.posLines.push_back(posRow);
-        wordRow.clear();
-        posRow.clear();
-    }
+
     return result;
 }
 
@@ -139,9 +146,12 @@ inline std::vector<std::vector<std::string>> Sentence::explodeSentence(const std
                 }
             } // if (node->stat != MECAB_BOS_NODE && node->stat != MECAB_EOS_NODE)
         } // for (; node; node = node->next)
-    }
-    if (sentence.size()) {
-        result.push_back(sentence);
+
+        // parse() と同じ理由で行末でも切る（#7）
+        if (sentence.size()) {
+            result.push_back(sentence);
+            sentence.clear();
+        }
     }
 
     return result;

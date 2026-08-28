@@ -62,3 +62,17 @@ install (TARGETS croco_keyphrase-shared DESTINATION ${EXTENSION_DIR}
     PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                 GROUP_EXECUTE GROUP_WRITE GROUP_READ 
                 WORLD_EXECUTE WORLD_READ)
+# ホスト単体テスト（zend / mecab / faiss 非依存、g++ 単体でもビルド可能）
+# include(CTest) の既定は ON のため、本番の拡張ビルドに混ざらないよう明示的に OFF にする。
+# 実行: cmake -DBUILD_TESTING=ON . && make test_phrases && ctest
+option(BUILD_TESTING "Build the testing tree." OFF)
+include(CTest)
+if(BUILD_TESTING)
+    foreach(name phrases)
+        add_executable(test_${name} ${CMAKE_SOURCE_DIR}/tests/test_${name}.cc)
+        target_include_directories(test_${name} PRIVATE ${CMAKE_SOURCE_DIR}/include)
+        # Release 系 configure の -DNDEBUG で assert が消えると中身ゼロで PASS してしまう
+        target_compile_options(test_${name} PRIVATE -UNDEBUG)
+        add_test(NAME ${name} COMMAND test_${name})
+    endforeach()
+endif()
