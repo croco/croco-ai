@@ -1,6 +1,39 @@
 #include <iostream>
+#include <stdexcept>
 #include "croco_faiss.h"
 #include "croco_sort.hpp"
+#include "croco_validate.hpp"
+
+namespace {
+
+/**
+ * PHP 配列を float ベクトルへ変換する
+ *
+ * 従来は zval を無検査で double として読んでいたため、float/int 以外の要素が
+ * 混ざるとビットの再解釈で値が壊れていた。型を検査し、想定外の要素は例外にする。
+ */
+std::vector<float> phpArrayToFloatVector(zval *array)
+{
+    HashTable *ht = Z_ARRVAL_P(array);
+    std::vector<float> vectors;
+    vectors.reserve(zend_hash_num_elements(ht));
+
+    zval *node;
+    ZEND_HASH_FOREACH_VAL(ht, node) {
+        ZVAL_DEREF(node); // foreach (... as &$v) 後の配列などに残る参照を実体まで解決する
+        if (Z_TYPE_P(node) == IS_DOUBLE) {
+            vectors.push_back(static_cast<float>(Z_DVAL_P(node)));
+        } else if (Z_TYPE_P(node) == IS_LONG) {
+            vectors.push_back(static_cast<float>(Z_LVAL_P(node)));
+        } else {
+            throw std::invalid_argument("vector elements must be int or float");
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return vectors;
+}
+
+} // namespace
 
 /* {{{ proto void faiss::__construct(int dimension[, string description, int metric])
  */
@@ -78,21 +111,11 @@ PHP_METHOD(croco_faiss_class, add)
     ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
     try {
-        HashTable *ht = Z_ARRVAL_P(array);
-        zend_hash_internal_pointer_reset(ht);
-        zend_ulong size = zend_hash_num_elements(ht);
-        std::vector<float> vectors;
-        for (zend_ulong idx=0; idx<size; idx++) {
-            zval *node = zend_hash_get_current_data(ht);
-            vectors.push_back(Z_DVAL_P(node));
-            zend_hash_move_forward(ht);
-        } // for (zend_ulong idx=0; idx<size; idx++)
-
         php_croco_faiss_object *faiObj = Z_FAISS_P(ZEND_THIS);
         faiss::Index *objIdx = reinterpret_cast<faiss::Index*>(faiObj->handle);
-        if (number == 0) {
-            number = size / objIdx->d;
-        }
+
+        std::vector<float> vectors = phpArrayToFloatVector(array);
+        number = croco::resolveRowCount(vectors.size(), number, objIdx->d);
         objIdx->add(number, vectors.data());
     } catch (const std::exception& e) {
         zend_throw_exception(zend_ce_error_exception, e.what(), 0);
@@ -117,31 +140,34 @@ PHP_METHOD(croco_faiss_class, addWithIds)
     ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
     try {
-        HashTable *ht = Z_ARRVAL_P(array);
-        zend_hash_internal_pointer_reset(ht);
-        zend_ulong size = zend_hash_num_elements(ht);
-        std::vector<float> vectors;
-        for (zend_ulong idx=0; idx<size; idx++) {
-            zval *node = zend_hash_get_current_data(ht);
-            vectors.push_back(Z_DVAL_P(node));
-            zend_hash_move_forward(ht);
-        } // for (zend_ulong idx=0; idx<size; idx++)
-
-        HashTable *idHt = Z_ARRVAL_P(idArray);
-        zend_hash_internal_pointer_reset(idHt);
-        zend_ulong idSize = zend_hash_num_elements(idHt);
-        std::vector<faiss::idx_t> ids;
-        for (zend_ulong idx=0; idx<idSize; idx++) {
-            zval *node = zend_hash_get_current_data(idHt);
-            ids.push_back(Z_LVAL_P(node));
-            zend_hash_move_forward(idHt);
-        } // for (zend_ulong idx=0; idx<size; idx++)
-
         php_croco_faiss_object *faiObj = Z_FAISS_P(ZEND_THIS);
         faiss::Index *objIdx = reinterpret_cast<faiss::Index*>(faiObj->handle);
-        if (number == 0) {
-            number = size / objIdx->d;
+
+        std::vector<float> vectors = phpArrayToFloatVector(array);
+        number = croco::resolveRowCount(vectors.size(), number, objIdx->d);
+
+        HashTable *idHt = Z_ARRVAL_P(idArray);
+        if (static_cast<zend_long>(zend_hash_num_elements(idHt)) != number) {
+            throw std::invalid_argument(
+                "ids length (" + std::to_string(zend_hash_num_elements(idHt))
+                + ") must equal the number of vectors (" + std::to_string(number) + ")");
         }
+        std::vector<faiss::idx_t> ids;
+        ids.reserve(number);
+        zval *node;
+        ZEND_HASH_FOREACH_VAL(idHt, node) {
+            ZVAL_DEREF(node);
+            if (Z_TYPE_P(node) != IS_LONG) {
+                throw std::invalid_argument("ids elements must be int");
+            }
+            if (Z_LVAL_P(node) == -1) {
+                // -1 は faiss が「候補なし」の番兵に使う予約値。登録を許すと
+                // 検索結果から黙って除外され、silent drop が再発する
+                throw std::invalid_argument("id -1 is reserved by faiss as the missing-result sentinel");
+            }
+            ids.push_back(Z_LVAL_P(node));
+        } ZEND_HASH_FOREACH_END();
+
         objIdx->add_with_ids(number, vectors.data(), ids.data());
     } catch (const std::exception& e) {
         zend_throw_exception(zend_ce_error_exception, e.what(), 0);
@@ -174,7 +200,7 @@ PHP_METHOD(croco_faiss_class, search)
 {
     zval *array;
     zend_long k = 0;
-    zend_long format = 0;
+    zend_long format = 0; // 予約引数（現状未実装。出力は常に Rank/ID/Count/Distance の配列）
     zend_long number = 0;
     ZEND_PARSE_PARAMETERS_START(1, 4)
         Z_PARAM_ARRAY(array)
@@ -185,33 +211,43 @@ PHP_METHOD(croco_faiss_class, search)
     ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
     try {
-        HashTable *ht = Z_ARRVAL_P(array);
-        zend_hash_internal_pointer_reset(ht);
-        zend_ulong size = zend_hash_num_elements(ht);
-        std::vector<float> querys;
-        for (zend_ulong idx=0; idx<size; idx++) {
-            zval *node = zend_hash_get_current_data(ht);
-            querys.push_back(Z_DVAL_P(node));
-            zend_hash_move_forward(ht);
-        } // for (zend_ulong idx=0; idx<size; idx++)
-
         php_croco_faiss_object *faiObj = Z_FAISS_P(ZEND_THIS);
         const faiss::Index *objIdx = reinterpret_cast<const faiss::Index*>(faiObj->handle);
+
+        std::vector<float> querys = phpArrayToFloatVector(array);
+        number = croco::resolveRowCount(querys.size(), number, objIdx->d);
+
+        if (k < 0) {
+            throw std::invalid_argument("k must be a positive integer");
+        }
         if (0 == k) {
             float x = std::sqrt(objIdx->ntotal);
             k = static_cast<zend_long>(x + 0.5f);
         }
-        if (0 == number) {
-            number = size / objIdx->d;
+        if (k > objIdx->ntotal) {
+            // 番兵 (-1) は結果から除外するため k > ntotal は k = ntotal と同一の結果になる。
+            // クランプしておくことで巨大な k による n * k の確保・乗算オーバーフローも防ぐ
+            k = objIdx->ntotal;
+        }
+        if (0 == k) {
+            // 空インデックス（ntotal == 0）への検索は、k の指定有無によらず空の結果を返す
+            // （クランプ後に判定することで k 明示指定の経路でも faiss の k > 0 要求を踏まない）
+            array_init(return_value);
+            return;
         }
 
+        // faiss は n * k 件書き込む。従来は k 件の VLA しか確保しておらず、
+        // n >= 2 でスタックを踏み越え、n == 0 では未初期化のスタックを返していた。
+        // なお n >= 2（複数クエリ）の結果はクエリ別に分かれず、ラベル単位で集約した
+        // 1 本のランキングになる（Count = 何本のクエリでヒットしたか）
         faiss::idx_t n = number;
-        float distances[k];
-        faiss::idx_t labels[k];
+        size_t total = static_cast<size_t>(n) * static_cast<size_t>(k);
+        std::vector<float> distances(total);
+        std::vector<faiss::idx_t> labels(total);
 
-        objIdx->search(n, querys.data(), k, distances, labels);
+        objIdx->search(n, querys.data(), k, distances.data(), labels.data());
 
-        std::vector<croco::stats_t> stats = croco::FaissStatsFormat(distances, labels, k);
+        std::vector<croco::stats_t> stats = croco::FaissStatsFormat(distances.data(), labels.data(), total);
         zend_long idx = 0;
         array_init(return_value);
         for (const auto& stat : stats) {
