@@ -23,6 +23,8 @@ public:
     typedef struct _phrase_t {
         std::string key;
         std::vector<std::string> words;
+        /* words と同じ並びの品詞 ID。数量だけのフレーズを弾くのに使う */
+        std::vector<unsigned short> poss;
         std::vector<float> offsets;
         int length;
         void line_t() {
@@ -31,6 +33,7 @@ public:
         void clear() {
             key.assign("");
             words.clear();
+            poss.clear();
             offsets.clear();
             length = 0;
         }
@@ -56,6 +59,7 @@ private:
     bool _isValid(const unsigned short posid, const std::string &word);
     bool _isStopWord(const std::vector<std::string> &words);
     bool _isAllShortWords(const std::vector<std::string> &words, size_t minimum_word_size);
+    bool _isAllNumeric(const std::vector<unsigned short> &poss);
     bool _isSymbolWord(const std::string &word);
     bool _isSymbolCodePoint(const uint32_t code);
     bool _filtering(const phrase_t &phrase, int minimum_length = 3, size_t minimum_word_size = 2, size_t maximum_word_number=5);
@@ -227,6 +231,38 @@ inline bool Phrases::_isAllShortWords(const std::vector<std::string> &words, siz
 }
 
 /**
+ * 数量だけで構成されたフレーズの判定
+ *
+ * 数詞と助数詞しか含まないフレーズを落とす。`2016年度` `30万円` `100` のような、
+ * 記事の主題にならないうえ検索ワードとしても役に立たない語が対象。
+ *
+ * とくに桁区切りのある金額は、mecab が `3,000,000円` を
+ * `3 / , / 000 / , / 000 / 円` と切り、`,` は辞書に無いので未知語になる。
+ * _isValid が記号でここを分断するため `000円` という壊れた断片が残る。
+ * 以前は 1 文字の `,` を含むフレーズを _isMinimumWordSize が丸ごと落として
+ * いたので表に出ていなかった (croco-ai#8)
+ *
+ * 数詞や助数詞が「混じっている」だけのフレーズは残す。`国道246号` `笹塚1丁目`
+ * `60mg` のように、内容語が 1 つでもあれば地名や規格として意味を持つため
+ *
+ * @access private
+ * @param  const std::vector<unsigned short> &poss  words と同じ並びの品詞 ID
+ * @return bool
+ */
+inline bool Phrases::_isAllNumeric(const std::vector<unsigned short> &poss)
+{
+    /* 48 名詞,数 / 53 名詞,接尾,助数詞（ipadic の pos-id.def より） */
+    for (auto &pos : poss) {
+        if (48 != pos && 53 != pos) {
+            return false;
+        }
+    }
+
+    /* poss は words と同じ長さで積むので、ここが空なら words も空 */
+    return !poss.empty();
+}
+
+/**
  * 記号だけで構成された語の判定
  *
  * @access private
@@ -334,6 +370,8 @@ inline bool Phrases::_filtering(const phrase_t &phrase, int minimum_length, size
         return false;
     } else if (_isAllShortWords(phrase.words, minimum_word_size)) {
         return false;
+    } else if (_isAllNumeric(phrase.poss)) {
+        return false;
     } else if (phrase.words.size() > maximum_word_number) {
         return false;
     }
@@ -440,6 +478,7 @@ inline bool Phrases::_appendMap(std::unordered_map<std::string, phrase_t> &map, 
         phrase_t phrase;
         for (auto &idx : idxs) {
             phrase.words.push_back(line.words.at(idx));
+            phrase.poss.push_back(line.pos.at(idx));
         }
         phrase.key.assign(key);
         phrase.offsets.push_back(line.shift + idxs.at(0));

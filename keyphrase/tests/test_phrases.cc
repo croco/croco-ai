@@ -16,7 +16,10 @@
 static const unsigned short PARTICLE = 13;
 static const unsigned short NOUN_SAHEN = 36;
 static const unsigned short NOUN = 38;
+static const unsigned short NOUN_PROPER_AREA = 46;
+static const unsigned short NOUN_NUMBER = 48;
 static const unsigned short NOUN_SUFFIX = 51;
+static const unsigned short NOUN_COUNTER = 53;
 static const unsigned short NOUN_DEPENDENT = 63;
 
 static croco::Lines::line_t makeLine(const std::vector<std::string> &words,
@@ -157,6 +160,45 @@ int main() {
         auto keys = keysOf({makeLine({"関西", "広域", "連合"},
                                      {41, NOUN_SAHEN, NOUN_SAHEN})});
         assert(has(keys, "関西広域連合"));
+    }
+
+    // ── 数量だけのフレーズは落とす ──
+    // mecab は 3,000,000円 を 3 / , / 000 / , / 000 / 円 と切り、`,` は未知語なので
+    // 記号として分断される。残った `000円` のような断片を候補にしない
+    {
+        auto keys = keysOf({makeLine({"000", "円"}, {NOUN_NUMBER, NOUN_COUNTER})});
+        assert(keys.empty());
+    }
+    {
+        // 2016年度 / 30万円 も同じ（数詞と助数詞だけ）
+        auto keys = keysOf({makeLine({"2016", "年度"}, {NOUN_NUMBER, NOUN_COUNTER})});
+        assert(keys.empty());
+        keys = keysOf({makeLine({"30", "万", "円"}, {NOUN_NUMBER, NOUN_NUMBER, NOUN_COUNTER})});
+        assert(keys.empty());
+    }
+    {
+        // 数詞だけの語も落ちる（緩和パスでも拾わない）
+        auto keys = keysOf({makeLine({"100"}, {NOUN_NUMBER})});
+        assert(keys.empty());
+    }
+    {
+        // 内容語が 1 つでも混じっていれば残す（地名・規格として意味を持つ）
+        auto keys = keysOf({makeLine({"国道", "246", "号"},
+                                     {NOUN, NOUN_NUMBER, NOUN_SUFFIX})});
+        assert((keys == std::vector<std::string>{"国道246号"}));
+
+        keys = keysOf({makeLine({"笹塚", "1", "丁目"},
+                                {NOUN_PROPER_AREA, NOUN_NUMBER, NOUN_COUNTER})});
+        assert((keys == std::vector<std::string>{"笹塚1丁目"}));
+
+        keys = keysOf({makeLine({"60", "mg"}, {NOUN_NUMBER, NOUN})});
+        assert((keys == std::vector<std::string>{"60mg"}));
+    }
+    {
+        // 数量が名詞列の途中に挟まっても、内容語があれば分断せず残す
+        auto keys = keysOf({makeLine({"受験", "者", "3204", "人"},
+                                     {NOUN_SAHEN, NOUN_SUFFIX, NOUN_NUMBER, NOUN_COUNTER})});
+        assert((keys == std::vector<std::string>{"受験者3204人"}));
     }
 
     // ── 候補数の上限 ──
