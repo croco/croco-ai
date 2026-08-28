@@ -2,17 +2,20 @@
 build
 node_modules
 
-# cmake のイン・ソースビルド成果物（tests/README.md の手順がこれを撒く）
+# cmake のイン・ソースビルド成果物（<ext>/tests/README.md の手順が <ext>/ に撒く）。
+# 先頭・途中に / を書くとリポジトリ直下にアンカーされて拡張ディレクトリに効かないので、
+# パス無しのパターンにする
 CMakeCache.txt
 CMakeFiles/
 CTestTestfile.cmake
+DartConfiguration.tcl
 Makefile
 Testing/
 cmake_install.cmake
-config/config.h
+config.h
 *.so
 
-# g++ 手順で作るテストバイナリ
-tests/test_*
-!tests/test_*.cc
-!tests/test_*.php
+# テストバイナリ（ソースの test_*.cc / test_*.php は残す）
+test_*
+!test_*.cc
+!test_*.php

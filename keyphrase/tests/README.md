@@ -10,17 +10,25 @@ cd keyphrase/tests
 g++ -std=c++17 -Wall -Wextra -I../include -o test_phrases test_phrases.cc && ./test_phrases
 ```
 
-cmake がある環境なら ctest 経由でも実行できる（`CMakeLists.txt` は `keyphrase/` に
-あるので、そちらで実行する）:
+ctest 経由でも実行できるが、`CMakeLists.txt` は `php-config` が引けないと
+`FATAL_ERROR` で止まるので、**拡張をビルドできる環境（php-dev がある）が要る**。
+「zend / mecab / faiss 非依存」なのは上の g++ 手順のほうで、こちらは拡張ビルドの
+ついでに回す用:
 
 ```sh
-cd keyphrase
+cd keyphrase   # CMakeLists.txt はここにある
 cmake -DBUILD_TESTING=ON . && make test_phrases && ctest
 ```
 
-どちらもイン・ソースビルドで `keyphrase/` に中間生成物を撒く。`.gitignore` に入れて
-あるので git には出ないが、消すなら `CMakeCache.txt` / `CMakeFiles/` / `Makefile` /
-`cmake_install.cmake` / `CTestTestfile.cmake` / `Testing/` / `tests/test_phrases`。
+どちらもイン・ソースビルドなので中間生成物を撒く。`.gitignore` に入れてあるので
+`git status` には出ない。消すなら:
+
+```sh
+cd keyphrase
+rm -rf CMakeCache.txt CMakeFiles/ CTestTestfile.cmake DartConfiguration.tcl \
+       Makefile Testing/ cmake_install.cmake config.h croco_keyphrase.so \
+       test_phrases tests/test_phrases
+```
 
 ## PHP 受け入れテスト（実機ビルド環境用）
 

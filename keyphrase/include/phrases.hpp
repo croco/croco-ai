@@ -363,7 +363,8 @@ inline void Phrases::_limitCandidates(candidate_t &result, size_t maximum)
     for (auto &idx : order) {
         auto &key = result.keys.at(idx);
         limited.keys.push_back(key);
-        limited.map.insert(std::make_pair(key, result.map.at(key)));
+        /* offsets は出現回数ぶんあるので move する（残すのは出現の多いフレーズ） */
+        limited.map.insert(std::make_pair(key, std::move(result.map.at(key))));
     }
 
     result = std::move(limited);
