@@ -107,10 +107,17 @@ inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines, siz
     }
 
     candidate_t result;
+    /*
+     * phrase は words / poss / offsets を持つので move で移す。allKeys は
+     * _appendMap が新規キーを返したときだけ積むので重複が無く、同じキーを
+     * 二度 move することはない。下の緩和ループは result.keys が空のとき＝
+     * ここで 1 件も取り出さなかったときにしか走らないので、moved-from を
+     * 読む経路も生じない
+     */
     for (auto &key : allKeys) {
         auto &phrase = map.at(key);
         if (_filtering(phrase)) {
-            result.map.insert(std::make_pair(key, phrase));
+            result.map.insert(std::make_pair(key, std::move(phrase)));
             result.keys.push_back(key);
         }
     }
@@ -122,7 +129,7 @@ inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines, siz
         for (auto &key : allKeys) {
             auto &phrase = map.at(key);
             if (_filtering(phrase, 1)) {
-                result.map.insert(std::make_pair(key, phrase));
+                result.map.insert(std::make_pair(key, std::move(phrase)));
                 result.keys.push_back(key);
             }
         }
