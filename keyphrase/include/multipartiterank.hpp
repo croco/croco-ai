@@ -214,13 +214,15 @@ inline std::vector<std::vector<std::string>> MultipartiteRank::_getVariants(cons
     }
 
     faiss::idx_t k = 4;
-    float distances[num * k];
-    faiss::idx_t labels[num * k];
+    // スタック上の可変長配列 (VLA) は num が大きいとスタックを溢れさせるため
+    // ヒープ確保にする (croco-ai#4)
+    std::vector<float> distances(num * k);
+    std::vector<faiss::idx_t> labels(num * k);
 
     faiss::IndexFlatL2 index_flat(dim);
     index_flat.add(num, cluster.data());
     index_flat.search(
-        num, cluster.data(), k, distances, labels
+        num, cluster.data(), k, distances.data(), labels.data()
     );
 
     std::set<std::string> duplicate;

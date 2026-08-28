@@ -17,8 +17,8 @@ zend_class_entry *croco_faiss_ce;
 /* {{{ arginfo */
 ZEND_BEGIN_ARG_INFO_EX(arginfo_croco_faiss_ctor, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, dimension, IS_LONG, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, description, IS_STRING, 0, "Flat")
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, size, IS_LONG, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, description, IS_STRING, 0, "\"Flat\"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, metric, IS_LONG, 0, "\\Croco\\Faiss\\METRIC_L2")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_croco_faiss_dtor, 0, 0, 0)
@@ -29,20 +29,20 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_croco_faiss_vector, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, array, IS_ARRAY, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, number, IS_LONG, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, number, IS_LONG, 0, "0")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_croco_faiss_addwids, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, array, IS_ARRAY, 0)
     ZEND_ARG_TYPE_INFO(0, ids, IS_ARRAY, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, number, IS_LONG, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, number, IS_LONG, 0, "0")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_croco_faiss_search, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, array, IS_ARRAY, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, k, IS_LONG, 1, "null")
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, format, IS_LONG, 1, "null")
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, number, IS_LONG, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, k, IS_LONG, 0, "0")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, format, IS_LONG, 0, "0")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, number, IS_LONG, 0, "0")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_croco_faiss_reconstruct, 0, 0, 1)
