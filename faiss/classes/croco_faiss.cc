@@ -292,35 +292,42 @@ PHP_METHOD(croco_faiss_class, reset)
 }
 /* }}} */
 
-/* {{{ proto bool faiss::reconstruct(int key, array recons)
+/* {{{ proto array faiss::reconstruct(int key)
  */
 PHP_METHOD(croco_faiss_class, reconstruct)
 {
     zend_long key;
-    zval *array;
-    ZEND_PARSE_PARAMETERS_START(2, 2)
+    ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_LONG(key)
-        Z_PARAM_ARRAY(array)
     ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
     try {
-        HashTable *ht = Z_ARRVAL_P(array);
-        zend_hash_internal_pointer_reset(ht);
-        zend_ulong size = zend_hash_num_elements(ht);
-        std::vector<float> recons;
-        for (zend_ulong idx=0; idx<size; idx++) {
-            zval *node = zend_hash_get_current_data(ht);
-            recons.push_back(Z_DVAL_P(node));
-            zend_hash_move_forward(ht);
-        } // for (zend_ulong idx=0; idx<size; idx++)
-
         php_croco_faiss_object *faiObj = Z_FAISS_P(ZEND_THIS);
-        reinterpret_cast<faiss::Index*>(faiObj->handle)->reconstruct(key, recons.data());
+        const faiss::Index *objIdx = reinterpret_cast<const faiss::Index*>(faiObj->handle);
+        if (objIdx->d <= 0) {
+            throw std::invalid_argument("index dimension must be positive");
+        }
+        if (key == ZEND_LONG_MAX) {
+            // faiss 内部の境界チェック (i0 + ni <= ntotal) は int64 の key + 1 が
+            // wrap すると通過してしまう。wrap する唯一の値をここで弾く
+            throw std::invalid_argument("key (" + std::to_string(key) + ") is out of range");
+        }
+
+        // faiss は d 個の float を書き込む。従来は呼び出し側の PHP 配列の要素数ぶんしか
+        // 確保しておらず、d に満たない配列でヒープを踏み越えていた。さらに引数が
+        // by-value のため書き込んだ結果は PHP 側へ返らなかった。
+        // 入力配列は faiss に読まれもしないため受け取りをやめ、復元ベクトルを戻り値で返す
+        std::vector<float> recons(static_cast<size_t>(objIdx->d));
+        objIdx->reconstruct(key, recons.data());
+
+        array_init(return_value);
+        for (float v : recons) {
+            add_next_index_double(return_value, static_cast<double>(v));
+        }
     } catch (const std::exception& e) {
         zend_throw_exception(zend_ce_error_exception, e.what(), 0);
         RETURN_FALSE;
     }
-    RETURN_TRUE;
 }
 /* }}} */
 
