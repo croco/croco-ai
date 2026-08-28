@@ -400,8 +400,9 @@ inline bool Phrases::_filtering(const phrase_t &phrase, int minimum_length, size
  * 候補は下流の MultipartiteRank で完全グラフになるため、辺の数・所要時間ともに
  * 候補数 n の 2 乗で増える。呼び出し側の入力長に上限が無い経路があり
  * （task-chiyoco の解析側は取得した競合ページ本文をそのまま渡す）、本番には
- * 89,315 文字のページが実在する。そこでは n=3,421 まで伸びてピーク 3.3GB になり、
- * 1024MB の Lambda が OOM した (croco-ai#7 のレビュー指摘)
+ * 89,315 文字のページが実在する。そこでは候補が n=3,183 まで伸び、
+ * 上限を入れないとピーク 1,166MB・extract 326.3s になって 1024MB の Lambda が
+ * OOM する (croco-ai#7 のレビュー指摘。PageRank のコピー削減を入れる前は 3.3GB だった)
  *
  * 上限を超えたぶんは出現回数の多い順に残す。同数なら初出が早いほうを優先し、
  * 残した集合は初出順に並べ直すので、上限に掛からない入力では並びも中身も変わらない。
@@ -418,10 +419,10 @@ inline bool Phrases::_filtering(const phrase_t &phrase, int minimum_length, size
  *
  * Lambda 1024MB / 0.579 vCPU 相当で、本番の最大級の入力（89,315 文字）を測った値:
  *
- *   n=1,200  ピーク 285MB  extract  44.7s   ← 既定値
- *   n=2,000  ピーク 530MB  extract 115.8s
- *   n=2,400  ピーク 745MB  extract 191.4s
- *   上限なし n=3,421  ピーク 1,299MB  extract 365.1s
+ *   n=1,200  ピーク   285MB  extract  43.9s   ← 既定値
+ *   n=2,000  ピーク   530MB  extract 115.8s
+ *   n=2,400  ピーク   745MB  extract 191.4s
+ *   上限なし ピーク 1,166MB  extract 326.3s（n=3,183）
  *
  * 修正前の同じ入力が 31.3s / 807MB だったので、1,200 なら時間は +13s に収まり、
  * メモリは 1/3 になる。2,000 は +84s で、getSimilarity の実測が無いまま
@@ -434,7 +435,7 @@ inline bool Phrases::_filtering(const phrase_t &phrase, int minimum_length, size
  * 注意: この上限が上界を与えるのは n（＝グラフの頂点数＝メモリ）であって、時間では
  * ない。_getWeight のコストは Σ|offsets_i|·|offsets_j| で、ここで残すのは出現回数の
  * 多い側なので、n を減らしても時間が減るとは限らない（89,315 文字は n が
- * 1,546 → 1,200 に減っているのに 31.3s → 43.5s と増えている）。時間側は
+ * 1,546 → 1,200 に減っているのに 31.3s → 43.9s と増えている）。時間側は
  * 「本番のサンプル 2,132 件に 269KB より密なページが無い」という実測に依存している。
  *
  * この上限が要るのはランク付けをする extract() の経路だけなので、candidate() は

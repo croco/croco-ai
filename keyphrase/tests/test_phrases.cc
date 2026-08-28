@@ -11,16 +11,15 @@
 #include "phrases.hpp"
 
 // ipadic の posid（pos-id.def より）
-//   13 助詞,格助詞,一般   36 名詞,サ変接続   38 名詞,一般
-//   41 名詞,固有名詞,一般 51 名詞,接尾,一般  63 名詞,非自立,一般
-static const unsigned short PARTICLE = 13;
-static const unsigned short NOUN_SAHEN = 36;
-static const unsigned short NOUN = 38;
-static const unsigned short NOUN_PROPER_AREA = 46;
-static const unsigned short NOUN_NUMBER = 48;
-static const unsigned short NOUN_SUFFIX = 51;
-static const unsigned short NOUN_COUNTER = 53;
-static const unsigned short NOUN_DEPENDENT = 63;
+static const unsigned short PARTICLE = 13;          // 助詞,格助詞,一般
+static const unsigned short NOUN_SAHEN = 36;        // 名詞,サ変接続
+static const unsigned short NOUN = 38;              // 名詞,一般
+static const unsigned short NOUN_PROPER = 41;       // 名詞,固有名詞,一般
+static const unsigned short NOUN_PROPER_AREA = 46;  // 名詞,固有名詞,地域,一般
+static const unsigned short NOUN_NUMBER = 48;       // 名詞,数
+static const unsigned short NOUN_SUFFIX = 51;       // 名詞,接尾,一般
+static const unsigned short NOUN_COUNTER = 53;      // 名詞,接尾,助数詞
+static const unsigned short NOUN_DEPENDENT = 63;    // 名詞,非自立,一般
 
 static croco::Lines::line_t makeLine(const std::vector<std::string> &words,
                                      const std::vector<unsigned short> &pos)
@@ -159,7 +158,7 @@ int main() {
     // ── 固有名詞・数詞も内容語として扱う（既存挙動）──
     {
         auto keys = keysOf({makeLine({"関西", "広域", "連合"},
-                                     {41, NOUN_SAHEN, NOUN_SAHEN})});
+                                     {NOUN_PROPER, NOUN_SAHEN, NOUN_SAHEN})});
         assert(has(keys, "関西広域連合"));
     }
 
