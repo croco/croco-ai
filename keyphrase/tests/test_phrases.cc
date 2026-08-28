@@ -32,7 +32,7 @@ static croco::Lines::line_t makeLine(const std::vector<std::string> &words,
 static std::vector<std::string> keysOf(const std::vector<croco::Lines::line_t> &lines)
 {
     croco::Phrases phrases;
-    return phrases.parse(lines).keys;
+    return phrases.parse(lines, croco::Phrases::MAXIMUM_CANDIDATES).keys;
 }
 
 static std::vector<std::string> keysOf(const std::vector<croco::Lines::line_t> &lines, size_t maximum)
@@ -177,8 +177,9 @@ int main() {
         assert((keysOf(lines) == std::vector<std::string>{"調理師免許", "食品衛生", "専門学校"}));
         assert((keysOf(lines, 3) == std::vector<std::string>{"調理師免許", "食品衛生", "専門学校"}));
         assert((keysOf(lines, 99) == std::vector<std::string>{"調理師免許", "食品衛生", "専門学校"}));
-        // 0 は無制限
-        assert((keysOf(lines, 0) == std::vector<std::string>{"調理師免許", "食品衛生", "専門学校"}));
+        // NO_CANDIDATE_LIMIT（0）は無制限
+        assert((keysOf(lines, croco::Phrases::NO_CANDIDATE_LIMIT)
+                == std::vector<std::string>{"調理師免許", "食品衛生", "専門学校"}));
 
         // 出現 1 回の 食品衛生 が落ち、残りは初出順のまま
         assert((keysOf(lines, 2) == std::vector<std::string>{"調理師免許", "専門学校"}));

@@ -42,7 +42,15 @@ public:
     } candidate_t;
 
 public:
-    candidate_t parse(std::vector<Lines::line_t> lines, size_t maximum_candidates = 1200);
+    /*
+     * 候補数の上限。詳しい根拠は _limitCandidates の docstring を見ること。
+     * 既定値は持たせず呼び出し側に必ず書かせる。extract() は上限あり・candidate() は
+     * 無制限、という非対称を call site から読み取れるようにするため (croco-ai#8)
+     */
+    static constexpr size_t MAXIMUM_CANDIDATES = 1200;
+    static constexpr size_t NO_CANDIDATE_LIMIT = 0;
+
+    candidate_t parse(std::vector<Lines::line_t> lines, size_t maximum_candidates);
 
 private:
     bool _isValid(const unsigned short posid, const std::string &word);

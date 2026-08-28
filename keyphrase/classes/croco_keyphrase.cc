@@ -57,8 +57,11 @@ PHP_METHOD(croco_keyphrase_class, extract)
         auto lines = lineParser.parse(sentences.wordLines, sentences.posLines);
 
         croco::Phrases phraseParser;
-        // parse は vector を値で受けるので move で渡す（lines はこの後使わない）
-        auto candidates = phraseParser.parse(std::move(lines));
+        // parse は vector を値で受けるので move で渡す（lines はこの後使わない）。
+        // 候補数に上限を掛けるのは、この後の MultipartiteRank が完全グラフを張るため
+        auto candidates = phraseParser.parse(
+            std::move(lines), croco::Phrases::MAXIMUM_CANDIDATES
+        );
 
         croco::MultipartiteRank rank;
         auto nodes = rank.getKeyPhrase(candidates);
@@ -101,10 +104,12 @@ PHP_METHOD(croco_keyphrase_class, candidate)
 
         croco::Phrases phraseParser;
         // parse は vector を値で受けるので move で渡す（lines はこの後使わない）。
-        // 候補数の上限は 0（無制限）を渡して外す。上限は下流の MultipartiteRank が
-        // 完全グラフを張るための安全弁で、ランク付けをしない candidate() には要らない。
-        // ここで切ると「拡張が実際に何を候補にしたか」を見る用途で使えなくなる (croco-ai#8)
-        auto candidates = phraseParser.parse(std::move(lines), 0);
+        // 候補数の上限は外す。上限は下流の MultipartiteRank が完全グラフを張るための
+        // 安全弁で、ランク付けをしない candidate() には要らない。ここで切ると
+        // 「拡張が実際に何を候補にしたか」を見る用途で使えなくなる (croco-ai#8)
+        auto candidates = phraseParser.parse(
+            std::move(lines), croco::Phrases::NO_CANDIDATE_LIMIT
+        );
 
         array_init(return_value);
         for (size_t idx = 0; idx < candidates.keys.size(); idx++) {
