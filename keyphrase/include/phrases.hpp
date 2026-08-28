@@ -42,7 +42,7 @@ public:
     } candidate_t;
 
 public:
-    candidate_t parse(std::vector<Lines::line_t> lines, size_t maximum_candidates = 1200);
+    candidate_t parse(std::vector<Lines::line_t> lines, size_t maximum_candidates = 2000);
 
 private:
     bool _isValid(const unsigned short posid, const std::string &word);
@@ -335,11 +335,22 @@ inline bool Phrases::_filtering(const phrase_t &phrase, int minimum_length, size
  *
  * 上限を超えたぶんは出現回数の多い順に残す。同数なら初出が早いほうを優先し、
  * 残した集合は初出順に並べ直すので、上限に掛からない入力では並びも中身も変わらない。
- * 呼び出し側が実際に使うのは上位十数件なので、切り捨てた側が結果に出ることはまず無い
+ *
+ * 逆に、上限に掛かった入力では上位の顔ぶれも変わる。実測（65,723 文字・n=1,847 を
+ * 1,200 で切った場合）で top-12 の一致は 7/12 だった。つまりこの上限は「結果が
+ * 変わらない線」ではなく「実行環境が壊れない最大」で決めるもので、既定値は
+ * Lambda 1024MB / 0.579 vCPU 相当での実測から選んでいる:
+ *
+ *   n=1,200  ピーク 285MB  extract  42.8s
+ *   n=2,000  ピーク 530MB  extract 115.8s   ← 既定値
+ *   n=2,400  ピーク 745MB  extract 191.4s
+ *
+ * 2,000 なら 65,723 文字（n=1,847）までは無傷で通り、本番の解析対象 2,132 件の
+ * サンプルで上限に掛かるのは 2 件（0.09%、約 180KB 超）だけになる
  *
  * @access private
  * @param  candidate_t &result
- * @param  size_t maximum
+ * @param  size_t maximum  0 なら無制限
  * @return void
  */
 inline void Phrases::_limitCandidates(candidate_t &result, size_t maximum)

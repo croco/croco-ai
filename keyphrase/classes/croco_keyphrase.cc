@@ -1,4 +1,6 @@
 #include <iostream>
+#include <utility>
+
 #include "croco_keyphrase.h"
 
 /* {{{ proto void keyphrase::__construct()
@@ -55,7 +57,8 @@ PHP_METHOD(croco_keyphrase_class, extract)
         auto lines = lineParser.parse(sentences.wordLines, sentences.posLines);
 
         croco::Phrases phraseParser;
-        auto candidates = phraseParser.parse(lines);
+        // parse は vector を値で受けるので move で渡す（lines はこの後使わない）
+        auto candidates = phraseParser.parse(std::move(lines));
 
         croco::MultipartiteRank rank;
         auto nodes = rank.getKeyPhrase(candidates);
@@ -97,7 +100,8 @@ PHP_METHOD(croco_keyphrase_class, candidate)
         auto lines = lineParser.parse(sentences.wordLines, sentences.posLines);
 
         croco::Phrases phraseParser;
-        auto candidates = phraseParser.parse(lines);
+        // parse は vector を値で受けるので move で渡す（lines はこの後使わない）
+        auto candidates = phraseParser.parse(std::move(lines));
 
         array_init(return_value);
         for (size_t idx = 0; idx < candidates.keys.size(); idx++) {
