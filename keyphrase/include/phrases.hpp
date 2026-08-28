@@ -251,7 +251,8 @@ inline bool Phrases::_isSymbolWord(const std::string &word)
  * ここに挙げていない記号（Latin-1 補助の × · °、℃ など）は素通しになる。単独で
  * 候補になれば minimum_length で落ちるが、名詞列の中に挟まると `A×B` のように
  * 繋がったままになりうる。ipadic に載っている記号は posid で先に落ちるため、
- * 実際に問題になるのは未知語推定で名詞にされたものだけ
+ * 実際に問題になるのは未知語推定で名詞にされたものだけ。
+ * 実データで出た `(` `)。` `:` と絵文字は塞いであるが、網は完全ではない
  *
  * @access private
  * @param  const uint32_t code
@@ -280,6 +281,14 @@ inline bool Phrases::_isSymbolCodePoint(const uint32_t code)
     }
     /* ・ (U+30FB) と長音符 ー (U+30FC) */
     if (0x30FB <= code && 0x30FC >= code) {
+        return true;
+    }
+    /* その他の記号と矢印（U+2B00-2BFF） */
+    if (0x2B00 <= code && 0x2BFF >= code) {
+        return true;
+    }
+    /* 絵文字（記号と絵文字・補助記号と絵文字ほか） */
+    if (0x1F000 <= code && 0x1FAFF >= code) {
         return true;
     }
     /* 全角の記号 (！〜／ ：〜＠ ［〜｀ ｛〜･) */

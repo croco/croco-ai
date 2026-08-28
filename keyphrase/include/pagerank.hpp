@@ -67,6 +67,12 @@ inline PageRank::node_t PageRank::execute(graph_t G)
             node.second = node.second / node_degree;
         }
     }
+    /*
+     * 旧実装は別の graph_t へ insert し直していたので unordered_map の反復順が
+     * G と違った。べき乗法の内側の加算順が変わるぶん結果は最終桁で動きうるが、
+     * 収束判定が err < N * 1.0e-6 なのでその範囲。実測（croco-ai#7 の記事）では
+     * 重みが小数第 6 位まで一致した
+     */
     graph_t &W = G;
 
     node_t x;

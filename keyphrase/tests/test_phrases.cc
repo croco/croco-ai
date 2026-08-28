@@ -91,8 +91,8 @@ int main() {
         assert(!has(keys, "食品衛生)。調理理論"));
     }
     {
-        // 全角記号・中黒・括弧
-        for (const std::string symbol : {"・", "、", "（", "〜", "／", "…"}) {
+        // 全角記号・中黒・括弧・絵文字（4 バイト UTF-8）
+        for (const std::string symbol : {"・", "、", "（", "〜", "／", "…", "😀", "★"}) {
             auto keys = keysOf({makeLine({"食品衛生", symbol, "調理理論"},
                                          {NOUN_SAHEN, NOUN_SAHEN, NOUN_SAHEN})});
             assert(keys.size() == 2);
