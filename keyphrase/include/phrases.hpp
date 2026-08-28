@@ -418,12 +418,12 @@ inline bool Phrases::_filtering(const phrase_t &phrase, int minimum_length, size
  *
  * Lambda 1024MB / 0.579 vCPU 相当で、本番の最大級の入力（89,315 文字）を測った値:
  *
- *   n=1,200  ピーク 285MB  extract  43.5s   ← 既定値
+ *   n=1,200  ピーク 285MB  extract  44.7s   ← 既定値
  *   n=2,000  ピーク 530MB  extract 115.8s
  *   n=2,400  ピーク 745MB  extract 191.4s
  *   上限なし n=3,421  ピーク 1,299MB  extract 365.1s
  *
- * 修正前の同じ入力が 31.3s / 807MB だったので、1,200 なら時間は +12s に収まり、
+ * 修正前の同じ入力が 31.3s / 807MB だったので、1,200 なら時間は +13s に収まり、
  * メモリは 1/3 になる。2,000 は +84s で、getSimilarity の実測が無いまま
  * 180 秒に賭ける形になるため採らない。
  *

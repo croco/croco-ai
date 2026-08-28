@@ -163,6 +163,50 @@ int main() {
         assert(has(keys, "関西広域連合"));
     }
 
+    // ── Lines::parse の shift が行をまたいで累積する ──
+    // shift は「先行行の語数の累積」＝語の大域インデックス。_getWeight の gap は
+    // これを使うので、行の切り方が細かくなっても値が変わらないことが前提になる
+    {
+        std::vector<std::vector<std::string>> wordLines = {
+            {"調理", "師"},                 // 2 語
+            {"免許", "の", "取得"},          // 3 語
+            {"試験"},                        // 1 語
+        };
+        std::vector<std::vector<unsigned short>> posLines = {
+            {NOUN_SAHEN, NOUN_SUFFIX},
+            {NOUN_SAHEN, PARTICLE, NOUN_SAHEN},
+            {NOUN_SAHEN},
+        };
+        croco::Lines lineParser;
+        auto lines = lineParser.parse(wordLines, posLines);
+
+        assert(lines.size() == 3);
+        assert(lines.at(0).shift == 0.0f);
+        assert(lines.at(1).shift == 2.0f);   // 1 行目の 2 語ぶん
+        assert(lines.at(2).shift == 5.0f);   // 1〜2 行目の 5 語ぶん
+        assert((lines.at(1).words == std::vector<std::string>{"免許", "の", "取得"}));
+        assert((lines.at(1).pos
+                == std::vector<unsigned short>{NOUN_SAHEN, PARTICLE, NOUN_SAHEN}));
+
+        // フレーズの offsets は shift + 行内の位置（＝大域インデックス）になる
+        croco::Phrases phrases;
+        auto cand = phrases.parse(lines, croco::Phrases::MAXIMUM_CANDIDATES);
+        assert(cand.map.count("調理師") == 1);
+        assert(cand.map.at("調理師").offsets.at(0) == 0.0f);
+        assert(cand.map.count("取得試験") == 0);   // 行をまたいで繋がらない
+    }
+    {
+        // 空行があっても累積はずれない
+        std::vector<std::vector<std::string>> wordLines = {{"調理", "師"}, {}, {"免許証"}};
+        std::vector<std::vector<unsigned short>> posLines = {
+            {NOUN_SAHEN, NOUN_SUFFIX}, {}, {NOUN},
+        };
+        croco::Lines lineParser;
+        auto lines = lineParser.parse(wordLines, posLines);
+        assert(lines.at(1).shift == 2.0f);
+        assert(lines.at(2).shift == 2.0f);
+    }
+
     // ── 数量だけのフレーズは落とす ──
     // mecab は 3,000,000円 を 3 / , / 000 / , / 000 / 円 と切り、`,` は未知語なので
     // 記号として分断される。残った `000円` のような断片を候補にしない
