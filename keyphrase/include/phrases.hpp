@@ -1,7 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <numeric>
 #include <string>
+#include <utility>
 #include <vector>
 #include <unordered_map>
 
@@ -39,7 +42,7 @@ public:
     } candidate_t;
 
 public:
-    candidate_t parse(std::vector<Lines::line_t> lines);
+    candidate_t parse(std::vector<Lines::line_t> lines, size_t maximum_candidates = 1200);
 
 private:
     bool _isValid(const unsigned short posid, const std::string &word);
@@ -48,6 +51,7 @@ private:
     bool _isSymbolWord(const std::string &word);
     bool _isSymbolCodePoint(const uint32_t code);
     bool _filtering(const phrase_t &phrase, int minimum_length = 3, size_t minimum_word_size = 2, size_t maximum_word_number=5);
+    void _limitCandidates(candidate_t &result, size_t maximum);
     bool _appendMap(std::unordered_map<std::string, phrase_t> &map, Lines::line_t &line, std::vector<size_t> &idxs);
     void _insertkeys(std::vector<std::string> &keys, std::vector<std::string> &words, std::vector<size_t> &idxs);
     size_t _utf8Strlen(const std::string word);
@@ -61,7 +65,7 @@ private:
  * @param  std::vector<Lines::line_t> lines
  * @return std::vector<std::string>
  */
-inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines)
+inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines, size_t maximum_candidates)
 {
     std::vector<std::string> allKeys;
     std::unordered_map<std::string, phrase_t> map;
@@ -112,6 +116,8 @@ inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines)
             }
         }
     } // if (0 == result.size())
+
+    _limitCandidates(result, maximum_candidates);
 
     return result;
 }
@@ -241,7 +247,11 @@ inline bool Phrases::_isSymbolWord(const std::string &word)
  * 文字が全部これ」のときだけ記号語と判定するので、々 や長音符 ー のように語の一部に
  * なりうる文字をここに含めても実在の語は落ちない（サーバー・人々には他の文字が
  * 混じるため）。逆に、それらだけでできた語は解析ノイズなので落として構わない。
- * 判定に漏れた記号があっても、単独なら minimum_length で落ちる
+ *
+ * ここに挙げていない記号（Latin-1 補助の × · °、℃ など）は素通しになる。単独で
+ * 候補になれば minimum_length で落ちるが、名詞列の中に挟まると `A×B` のように
+ * 繋がったままになりうる。ipadic に載っている記号は posid で先に落ちるため、
+ * 実際に問題になるのは未知語推定で名詞にされたものだけ
  *
  * @access private
  * @param  const uint32_t code
@@ -312,6 +322,51 @@ inline bool Phrases::_filtering(const phrase_t &phrase, int minimum_length, size
     }
 
     return true;
+}
+
+/**
+ * 候補数の上限適用
+ *
+ * 候補は下流の MultipartiteRank で完全グラフになるため、辺の数・所要時間ともに
+ * 候補数 n の 2 乗で増える。呼び出し側の入力長に上限が無い経路があり
+ * （task-chiyoco の解析側は取得した競合ページ本文をそのまま渡す）、本番には
+ * 89,315 文字のページが実在する。そこでは n=3,421 まで伸びてピーク 3.3GB になり、
+ * 1024MB の Lambda が OOM した (croco-ai#7 のレビュー指摘)
+ *
+ * 上限を超えたぶんは出現回数の多い順に残す。同数なら初出が早いほうを優先し、
+ * 残した集合は初出順に並べ直すので、上限に掛からない入力では並びも中身も変わらない。
+ * 呼び出し側が実際に使うのは上位十数件なので、切り捨てた側が結果に出ることはまず無い
+ *
+ * @access private
+ * @param  candidate_t &result
+ * @param  size_t maximum
+ * @return void
+ */
+inline void Phrases::_limitCandidates(candidate_t &result, size_t maximum)
+{
+    if (0 == maximum || maximum >= result.keys.size()) {
+        return;
+    }
+
+    std::vector<size_t> order(result.keys.size());
+    std::iota(order.begin(), order.end(), 0);
+
+    /* stable_sort なので、出現回数が同じものは初出順のまま残る */
+    std::stable_sort(order.begin(), order.end(), [&](size_t lhs, size_t rhs) {
+        return result.map.at(result.keys.at(lhs)).offsets.size()
+             > result.map.at(result.keys.at(rhs)).offsets.size();
+    });
+    order.resize(maximum);
+    std::sort(order.begin(), order.end());
+
+    candidate_t limited;
+    for (auto &idx : order) {
+        auto &key = result.keys.at(idx);
+        limited.keys.push_back(key);
+        limited.map.insert(std::make_pair(key, result.map.at(key)));
+    }
+
+    result = std::move(limited);
 }
 
 /**

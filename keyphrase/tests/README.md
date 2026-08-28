@@ -6,15 +6,21 @@
 しなくても手元の g++ だけで回せる。分かち書き済みの語と posid を直接与える。
 
 ```sh
-cd tests
+cd keyphrase/tests
 g++ -std=c++17 -Wall -Wextra -I../include -o test_phrases test_phrases.cc && ./test_phrases
 ```
 
-cmake がある環境なら ctest 経由でも実行できる:
+cmake がある環境なら ctest 経由でも実行できる（`CMakeLists.txt` は `keyphrase/` に
+あるので、そちらで実行する）:
 
 ```sh
+cd keyphrase
 cmake -DBUILD_TESTING=ON . && make test_phrases && ctest
 ```
+
+どちらもイン・ソースビルドで `keyphrase/` に中間生成物を撒く。`.gitignore` に入れて
+あるので git には出ないが、消すなら `CMakeCache.txt` / `CMakeFiles/` / `Makefile` /
+`cmake_install.cmake` / `CTestTestfile.cmake` / `Testing/` / `tests/test_phrases`。
 
 ## PHP 受け入れテスト（実機ビルド環境用）
 

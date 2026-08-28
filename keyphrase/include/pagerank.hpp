@@ -34,8 +34,14 @@ private:
 /**
  * グラフからページランクを算出
  *
+ * G は候補数 n に対して n^2 の辺を持つ完全グラフなので、コピーが 1 本増えるだけで
+ * ピークメモリが 1/3 ずつ増える。呼び出し側から std::move で受け取り、正規化も
+ * 別の graph_t を作らず G の中で行うことで、この関数が抱える n^2 構造を 1 本に
+ * 抑える（croco-ai#7 のレビュー指摘。本番の解析対象に 89,315 文字のページが実在し、
+ * そこでピーク 3.3GB / Lambda 1024MB が OOM していた）
+ *
  * @access private
- * @param  graph_t G
+ * @param  graph_t G  値渡し。呼び出し側は std::move で渡すこと
  * @return node_t
  */
 inline PageRank::node_t PageRank::execute(graph_t G)
@@ -50,20 +56,18 @@ inline PageRank::node_t PageRank::execute(graph_t G)
         throw std::logic_error("Graph data required.");
     }
 
-    graph_t W;
+    /* 各行を出次数で割って遷移確率にする（G を書き換えるので追加の確保は無い） */
     for (auto &line : G) {
         double node_degree = 0.0f;
         for (auto &node : line.second) {
             node_degree += node.second;
         }
 
-        node_t new_node;
         for (auto &node : line.second) {
-            double weight = node.second / node_degree;
-            new_node.insert(std::make_pair(node.first, weight));
+            node.second = node.second / node_degree;
         }
-        W.insert(std::make_pair(line.first, new_node));
     }
+    graph_t &W = G;
 
     node_t x;
     for (auto &node : W) {

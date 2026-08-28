@@ -1,3 +1,18 @@
 .vscode
 build
 node_modules
+
+# cmake のイン・ソースビルド成果物（tests/README.md の手順がこれを撒く）
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+Makefile
+Testing/
+cmake_install.cmake
+config/config.h
+*.so
+
+# g++ 手順で作るテストバイナリ
+tests/test_*
+!tests/test_*.cc
+!tests/test_*.php

@@ -35,6 +35,12 @@ static std::vector<std::string> keysOf(const std::vector<croco::Lines::line_t> &
     return phrases.parse(lines).keys;
 }
 
+static std::vector<std::string> keysOf(const std::vector<croco::Lines::line_t> &lines, size_t maximum)
+{
+    croco::Phrases phrases;
+    return phrases.parse(lines, maximum).keys;
+}
+
 static bool has(const std::vector<std::string> &keys, const std::string &key)
 {
     return std::find(keys.begin(), keys.end(), key) != keys.end();
@@ -151,6 +157,40 @@ int main() {
         auto keys = keysOf({makeLine({"関西", "広域", "連合"},
                                      {41, NOUN_SAHEN, NOUN_SAHEN})});
         assert(has(keys, "関西広域連合"));
+    }
+
+    // ── 候補数の上限 ──
+    // 下流の MultipartiteRank が完全グラフを張るので、候補数は n^2 で効く。
+    // 上限を超えたら出現回数の多い順に残し、残した集合は初出順に並べ直す
+    {
+        // 初出順は 調理師免許 → 食品衛生 → 専門学校、出現回数は 3 / 1 / 2
+        const std::vector<croco::Lines::line_t> lines = {
+            makeLine({"調理", "師", "免許"}, {NOUN_SAHEN, NOUN_SUFFIX, NOUN_SAHEN}),
+            makeLine({"食品衛生"}, {NOUN_SAHEN}),
+            makeLine({"専門学校"}, {NOUN}),
+            makeLine({"調理", "師", "免許"}, {NOUN_SAHEN, NOUN_SUFFIX, NOUN_SAHEN}),
+            makeLine({"専門学校"}, {NOUN}),
+            makeLine({"調理", "師", "免許"}, {NOUN_SAHEN, NOUN_SUFFIX, NOUN_SAHEN}),
+        };
+
+        // 上限に掛からなければ中身も並びも変わらない
+        assert((keysOf(lines) == std::vector<std::string>{"調理師免許", "食品衛生", "専門学校"}));
+        assert((keysOf(lines, 3) == std::vector<std::string>{"調理師免許", "食品衛生", "専門学校"}));
+        assert((keysOf(lines, 99) == std::vector<std::string>{"調理師免許", "食品衛生", "専門学校"}));
+        // 0 は無制限
+        assert((keysOf(lines, 0) == std::vector<std::string>{"調理師免許", "食品衛生", "専門学校"}));
+
+        // 出現 1 回の 食品衛生 が落ち、残りは初出順のまま
+        assert((keysOf(lines, 2) == std::vector<std::string>{"調理師免許", "専門学校"}));
+        assert((keysOf(lines, 1) == std::vector<std::string>{"調理師免許"}));
+    }
+    {
+        // 出現回数が同じなら初出の早いほうを残す
+        const std::vector<croco::Lines::line_t> lines = {
+            makeLine({"食品衛生"}, {NOUN_SAHEN}),
+            makeLine({"専門学校"}, {NOUN}),
+        };
+        assert((keysOf(lines, 1) == std::vector<std::string>{"食品衛生"}));
     }
 
     puts("all tests passed");

@@ -9,6 +9,7 @@
 #include <map>
 #include <set>
 #include <unordered_map>
+#include <utility>
 
 #include <faiss/IndexFlat.h>
 
@@ -67,7 +68,8 @@ inline std::vector<MultipartiteRank::node_t> MultipartiteRank::getKeyPhrase(cons
     _weightAdjustment(candidates, graph);
 
     PageRank prank;
-    auto rank = prank.execute(graph);
+    // graph は n^2 の完全グラフ。execute は値渡しなので move で渡してコピーを避ける
+    auto rank = prank.execute(std::move(graph));
     std::priority_queue<node_t> queue;
     for (auto &node : rank) {
         queue.push({node.first, static_cast<float>(node.second)});
