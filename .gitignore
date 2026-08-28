@@ -1,3 +1,23 @@
 .vscode
 build
 node_modules
+
+# cmake のイン・ソースビルド成果物（<ext>/tests/README.md の手順が <ext>/ に撒く）。
+# 先頭・途中に / を書くとリポジトリ直下にアンカーされて拡張ディレクトリに効かないので、
+# パス無しのパターンにする
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+DartConfiguration.tcl
+Makefile
+Testing/
+cmake_install.cmake
+config.h
+*.so
+
+# テストバイナリ（ソースの test_*.cc / test_*.php は残す）。
+# test_* はディレクトリ名にも当たり、除外された親の下は ! で戻せないので、
+# tests/ 配下に test_data/ のような固定データ置き場を作るときはここを見直すこと
+test_*
+!test_*.cc
+!test_*.php

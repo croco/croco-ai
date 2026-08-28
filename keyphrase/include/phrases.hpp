@@ -1,7 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <numeric>
 #include <string>
+#include <utility>
 #include <vector>
 #include <unordered_map>
 
@@ -20,6 +23,8 @@ public:
     typedef struct _phrase_t {
         std::string key;
         std::vector<std::string> words;
+        /* words と同じ並びの品詞 ID。数量だけのフレーズを弾くのに使う */
+        std::vector<unsigned short> poss;
         std::vector<float> offsets;
         int length;
         void line_t() {
@@ -28,6 +33,7 @@ public:
         void clear() {
             key.assign("");
             words.clear();
+            poss.clear();
             offsets.clear();
             length = 0;
         }
@@ -39,26 +45,41 @@ public:
     } candidate_t;
 
 public:
-    candidate_t parse(std::vector<Lines::line_t> lines);
+    /*
+     * 候補数の上限。詳しい根拠は _limitCandidates の docstring を見ること。
+     * 既定値は持たせず呼び出し側に必ず書かせる。extract() は上限あり・candidate() は
+     * 無制限、という非対称を call site から読み取れるようにするため (croco-ai#8)
+     */
+    static constexpr size_t MAXIMUM_CANDIDATES = 1200;
+    static constexpr size_t NO_CANDIDATE_LIMIT = 0;
+
+    candidate_t parse(std::vector<Lines::line_t> lines, size_t maximum_candidates);
 
 private:
-    bool _isValid(const unsigned short posid);
+    bool _isValid(const unsigned short posid, const std::string &word);
     bool _isStopWord(const std::vector<std::string> &words);
-    bool _isMinimumWordSize(const std::vector<std::string> &words, size_t minimum_word_size);
+    bool _isAllShortWords(const std::vector<std::string> &words, size_t minimum_word_size);
+    bool _isAllNumeric(const std::vector<unsigned short> &poss);
+    bool _isSymbolWord(const std::string &word);
+    bool _isSymbolCodePoint(const uint32_t code);
     bool _filtering(const phrase_t &phrase, int minimum_length = 3, size_t minimum_word_size = 2, size_t maximum_word_number=5);
+    void _limitCandidates(candidate_t &result, size_t maximum);
     bool _appendMap(std::unordered_map<std::string, phrase_t> &map, Lines::line_t &line, std::vector<size_t> &idxs);
     void _insertkeys(std::vector<std::string> &keys, std::vector<std::string> &words, std::vector<size_t> &idxs);
     size_t _utf8Strlen(const std::string word);
+    uint32_t _utf8CodePoint(const std::string &word, size_t &pos);
 }; // class Lines
 
 /**
  * トピック（フレーズ）の取得
  *
  * @access public
- * @param  std::vector<Lines::line_t> lines
- * @return std::vector<std::string>
+ * @param  std::vector<Lines::line_t> lines  値渡し。呼び出し側は std::move で渡すこと
+ * @param  size_t maximum_candidates  候補数の上限。0 なら無制限。
+ *                                    MAXIMUM_CANDIDATES / NO_CANDIDATE_LIMIT を渡す
+ * @return candidate_t
  */
-inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines)
+inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines, size_t maximum_candidates)
 {
     std::vector<std::string> allKeys;
     std::unordered_map<std::string, phrase_t> map;
@@ -67,7 +88,7 @@ inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines)
         size_t old = 0;
         std::vector<size_t> idxs;
         for (size_t idx = 0; idx < line.pos.size(); idx++) {
-            if (_isValid(line.pos.at(idx))) {
+            if (_isValid(line.pos.at(idx), line.words.at(idx))) {
                 if (old != (idx - 1)) {
                     if (idxs.size()) {
                         if (!_appendMap(map, line, idxs)) {
@@ -87,12 +108,18 @@ inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines)
         }
     }
 
-    std::vector<std::string> keys;
     candidate_t result;
+    /*
+     * phrase は words / poss / offsets を持つので move で移す。allKeys は
+     * _appendMap が新規キーを返したときだけ積むので重複が無く、同じキーを
+     * 二度 move することはない。下の緩和ループは result.keys が空のとき＝
+     * ここで 1 件も取り出さなかったときにしか走らないので、moved-from を
+     * 読む経路も生じない
+     */
     for (auto &key : allKeys) {
         auto &phrase = map.at(key);
         if (_filtering(phrase)) {
-            result.map.insert(std::make_pair(key, phrase));
+            result.map.insert(std::make_pair(key, std::move(phrase)));
             result.keys.push_back(key);
         }
     }
@@ -104,11 +131,13 @@ inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines)
         for (auto &key : allKeys) {
             auto &phrase = map.at(key);
             if (_filtering(phrase, 1)) {
-                result.map.insert(std::make_pair(key, phrase));
+                result.map.insert(std::make_pair(key, std::move(phrase)));
                 result.keys.push_back(key);
             }
         }
     } // if (0 == result.size())
+
+    _limitCandidates(result, maximum_candidates);
 
     return result;
 }
@@ -116,19 +145,28 @@ inline Phrases::candidate_t Phrases::parse(std::vector<Lines::line_t> lines)
 /**
  * NOUN PROPN ADJ NUM 判定
  *
+ * 品詞 ID だけでなく表層も見る。mecab は辞書に無い記号を未知語として推定し
+ * 「名詞,サ変接続」(posid 36) を振るため、品詞 ID だけだと `(` `)。` `:` が
+ * 内容語として名詞列に取り込まれ、`後述)。` `食文化概論:日本` `例).2016年度`
+ * のような候補になる。全角記号は ipadic に「記号,括弧開」等で載っているので
+ * この経路に入らないが、呼び出し側で NFKC 正規化した入力は半角に落ちて入る (#7)
+ *
  * @access private
  * @param  const unsigned short posid
+ * @param  const std::string &word
  * @return bool
  */
-inline bool Phrases::_isValid(const unsigned short posid)
+inline bool Phrases::_isValid(const unsigned short posid, const std::string &word)
 {
     /* 名詞 36〜67 形容詞 10〜12 */
-    if (36 <= posid && 67 >= posid) {
-        return true;
-    } else if (10 <= posid && 12 >= posid) {
-        return true;
+    if (36 > posid || 67 < posid) {
+        if (10 > posid || 12 < posid) {
+            return false;
+        }
     }
-    return false;
+
+    /* 表層の走査は品詞で絞ってから（大半の語はここへ来ない） */
+    return !_isSymbolWord(word);
 }
 
 /**
@@ -170,19 +208,162 @@ inline bool Phrases::_isStopWord(const std::vector<std::string> &words)
 }
 
 /**
- * 最小値判定
+ * 全語が最小語長未満かの判定
+ *
+ * 1 語でも minimum_word_size 以上の語があれば false（＝フレーズを残す）。
+ *
+ * 以前は「1 語でも minimum_word_size 未満なら落とす」だった。pke の
+ * candidate_filtering(minimum_word_size=2) をそのまま持ってきた条件で、1 文字語が
+ * ノイズになる英語向けのもの。日本語の形態素に当てると、ipadic が `調理師免許` を
+ * `調理 / 師 / 免許` と切るので 1 文字の接尾辞「師」だけでフレーズ全体が落ち、
+ * `調理師` `栄養士` `食文化` のような接尾辞つき・1 文字語つきの複合名詞が
+ * 候補から丸ごと消えていた (#7)
+ *
+ * フレーズ全体の長さは _filtering の minimum_length で見ているので、ここに残す
+ * 役目は「1 文字語の切れ端だけでできた列」を落とすことだけでよい
  *
  * @access private
  * @param  const std::vector<std::string> &words
- * @param  int minimum_word_size
+ * @param  size_t minimum_word_size
  * @return bool
  */
-inline bool Phrases::_isMinimumWordSize(const std::vector<std::string> &words, size_t minimum_word_size)
+inline bool Phrases::_isAllShortWords(const std::vector<std::string> &words, size_t minimum_word_size)
 {
     for (auto &word : words) {
-        if (_utf8Strlen(word) < minimum_word_size) {
-            return true;
+        if (_utf8Strlen(word) >= minimum_word_size) {
+            return false;
         }
+    }
+
+    return true;
+}
+
+/**
+ * 数量だけで構成されたフレーズの判定
+ *
+ * 数詞と助数詞しか含まないフレーズを落とす。`2016年度` `30万円` `100` のような、
+ * 記事の主題にならないうえ検索ワードとしても役に立たない語が対象。
+ *
+ * とくに桁区切りのある金額は、mecab が `3,000,000円` を
+ * `3 / , / 000 / , / 000 / 円` と切り、`,` は辞書に無いので未知語になる。
+ * _isValid が記号でここを分断するため `000円` という壊れた断片が残る。
+ * 以前は 1 文字の `,` を含むフレーズを _isMinimumWordSize が丸ごと落として
+ * いたので表に出ていなかった (croco-ai#8)
+ *
+ * 数詞や助数詞が「混じっている」だけのフレーズは残す。`国道246号` `笹塚1丁目`
+ * `60mg` のように、内容語が 1 つでもあれば地名や規格として意味を持つため。
+ *
+ * 落ちるのは壊れた断片だけではない。ipadic の助数詞には `程度` `時間` `世紀`
+ * `ページ` のように、単独なら一般語として読めるものも含まれるので、`1万円程度`
+ * `3時間` `21世紀` のような日付・数量・順位もまとめて落ちる。検索ワードとしても
+ * 主題としても使えないので意図どおりだが、範囲は「壊れた断片」より広い
+ *
+ * @access private
+ * @param  const std::vector<unsigned short> &poss  words と同じ並びの品詞 ID
+ * @return bool
+ */
+inline bool Phrases::_isAllNumeric(const std::vector<unsigned short> &poss)
+{
+    /* 48 名詞,数 / 53 名詞,接尾,助数詞（ipadic の pos-id.def より） */
+    for (auto &pos : poss) {
+        if (48 != pos && 53 != pos) {
+            return false;
+        }
+    }
+
+    /* poss は words と同じ長さで積むので、ここが空なら words も空 */
+    return !poss.empty();
+}
+
+/**
+ * 記号だけで構成された語の判定
+ *
+ * 空文字も true を返す。「記号だから」ではなく、内容語として扱えないものを
+ * _isValid で落として名詞列を分断させるため。mecab の surface が空になることは
+ * 実質ないが、この関数を別用途で使い回すときは意味が違う点に注意
+ *
+ * @access private
+ * @param  const std::string &word
+ * @return bool
+ */
+inline bool Phrases::_isSymbolWord(const std::string &word)
+{
+    if (word.empty()) {
+        return true;
+    }
+
+    for (size_t pos = 0; pos < word.size();) {
+        if (!_isSymbolCodePoint(_utf8CodePoint(word, pos))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * 記号のコードポイント判定
+ *
+ * 未知語として名詞扱いされた記号を弾くためのもの。_isSymbolWord は「語を構成する
+ * 文字が全部これ」のときだけ記号語と判定するので、々 や長音符 ー のように語の一部に
+ * なりうる文字をここに含めても実在の語は落ちない（サーバー・人々には他の文字が
+ * 混じるため）。逆に、それらだけでできた語は解析ノイズなので落として構わない。
+ *
+ * ここに挙げていない記号（Latin-1 補助の × · °、℃ など）は素通しになる。単独で
+ * 候補になれば minimum_length で落ちるが、名詞列の中に挟まると `A×B` のように
+ * 繋がったままになりうる。ipadic に載っている記号は posid で先に落ちるため、
+ * 実際に問題になるのは未知語推定で名詞にされたものだけ。
+ * 実データで出た `(` `)。` `:` と絵文字は塞いであるが、網は完全ではない
+ *
+ * @access private
+ * @param  const uint32_t code
+ * @return bool
+ */
+inline bool Phrases::_isSymbolCodePoint(const uint32_t code)
+{
+    if (0x80 > code) {
+        /* ASCII は英数字以外（記号・空白・制御文字）を記号とみなす */
+        return !((0x30 <= code && 0x39 >= code) ||
+                 (0x41 <= code && 0x5A >= code) ||
+                 (0x61 <= code && 0x7A >= code));
+    }
+
+    /* 一般句読点 (– — ‘ ’ “ ” … ‰ ′ ″ ほか) */
+    if (0x2000 <= code && 0x206F >= code) {
+        return true;
+    }
+    /* 矢印・数学記号・囲み文字・罫線・幾何学模様・その他の記号 */
+    if (0x2190 <= code && 0x27BF >= code) {
+        return true;
+    }
+    /* CJK の記号と句読点 (、 。 〈 〉 《 》 「 」 『 』 【 】 〜 々 〆 ほか) */
+    if (0x3000 <= code && 0x303F >= code) {
+        return true;
+    }
+    /* ・ (U+30FB) と長音符 ー (U+30FC) */
+    if (0x30FB <= code && 0x30FC >= code) {
+        return true;
+    }
+    /* その他の記号と矢印（U+2B00-2BFF） */
+    if (0x2B00 <= code && 0x2BFF >= code) {
+        return true;
+    }
+    /* 絵文字（記号と絵文字・補助記号と絵文字ほか） */
+    if (0x1F000 <= code && 0x1FAFF >= code) {
+        return true;
+    }
+    /* 全角の記号 (！〜／ ：〜＠ ［〜｀ ｛〜･) */
+    if (0xFF01 <= code && 0xFF0F >= code) {
+        return true;
+    }
+    if (0xFF1A <= code && 0xFF20 >= code) {
+        return true;
+    }
+    if (0xFF3B <= code && 0xFF40 >= code) {
+        return true;
+    }
+    if (0xFF5B <= code && 0xFF65 >= code) {
+        return true;
     }
 
     return false;
@@ -204,13 +385,95 @@ inline bool Phrases::_filtering(const phrase_t &phrase, int minimum_length, size
         return false;
     } else if (minimum_length > phrase.length) {
         return false;
-    } else if (_isMinimumWordSize(phrase.words, minimum_word_size)) {
+    } else if (_isAllShortWords(phrase.words, minimum_word_size)) {
+        return false;
+    } else if (_isAllNumeric(phrase.poss)) {
         return false;
     } else if (phrase.words.size() > maximum_word_number) {
         return false;
     }
 
     return true;
+}
+
+/**
+ * 候補数の上限適用
+ *
+ * 候補は下流の MultipartiteRank で完全グラフになるため、辺の数・所要時間ともに
+ * 候補数 n の 2 乗で増える。呼び出し側の入力長に上限が無い経路があり
+ * （task-chiyoco の解析側は取得した競合ページ本文をそのまま渡す）、本番には
+ * 89,315 文字のページが実在する。そこでは候補が n=3,183 まで伸び、
+ * 上限を入れないとピーク 1,166MB・extract 326.3s になって 1024MB の Lambda が
+ * OOM する (croco-ai#7 のレビュー指摘。PageRank のコピー削減を入れる前は 3.3GB だった)
+ *
+ * 上限を超えたぶんは出現回数の多い順に残す。同数なら初出が早いほうを優先し、
+ * 残した集合は初出順に並べ直すので、上限に掛からない入力では並びも中身も変わらない。
+ *
+ * 逆に、上限に掛かった入力では上位の顔ぶれも変わる。実測（65,723 文字・n=1,847 を
+ * 1,200 で切った場合）で top-12 の一致は 7/12 だった。つまりこの上限は「結果が
+ * 変わらない線」ではなく「実行環境が壊れない最大」で決めるもの。
+ *
+ * 効いてくる制限は Lambda の Timeout（480s）ではなく、呼び出し側が
+ * task-chiyoco の analysis/var/task/app.php:16 で入れている
+ * max_execution_time = 180 のほう。同じプロセスで getContents → kagemusha
+ * （java の子プロセス）→ この extract → getSimilarity（全文の embedding）を
+ * 順に回すので、180 秒はその合計に対する枠になる (croco-ai#8 の codex レビュー指摘)。
+ *
+ * Lambda 1024MB / 0.579 vCPU 相当で、本番の最大級の入力（89,315 文字）を測った値:
+ *
+ *   n=1,200  ピーク   285MB  extract  43.9s   ← 既定値
+ *   n=2,000  ピーク   530MB  extract 115.8s
+ *   n=2,400  ピーク   745MB  extract 191.4s
+ *   上限なし ピーク 1,166MB  extract 326.3s（n=3,183）
+ *
+ * 修正前の同じ入力が 31.3s / 807MB だったので、1,200 なら時間は +13s に収まり、
+ * メモリは 1/3 になる。2,000 は +84s で、getSimilarity の実測が無いまま
+ * 180 秒に賭ける形になるため採らない。
+ *
+ * 所要時間は n だけでなく offsets の密度（同じフレーズの出現回数）で決まる。
+ * 本番の実データで n=1,609（37,369 文字）は上限なしでも 7.9s / 346MB で通るので、
+ * 上限に掛かって重くなるのは繰り返しの多い巨大ページだけ。
+ *
+ * 注意: この上限が上界を与えるのは n（＝グラフの頂点数＝メモリ）であって、時間では
+ * ない。_getWeight のコストは Σ|offsets_i|·|offsets_j| で、ここで残すのは出現回数の
+ * 多い側なので、n を減らしても時間が減るとは限らない（89,315 文字は n が
+ * 1,546 → 1,200 に減っているのに 31.3s → 43.9s と増えている）。時間側は
+ * 「本番のサンプル 2,132 件に 269KB より密なページが無い」という実測に依存している。
+ *
+ * この上限が要るのはランク付けをする extract() の経路だけなので、candidate() は
+ * 0（無制限）を渡して素の候補集合を返す（croco_keyphrase.cc 参照）
+ *
+ * @access private
+ * @param  candidate_t &result
+ * @param  size_t maximum  0 なら無制限
+ * @return void
+ */
+inline void Phrases::_limitCandidates(candidate_t &result, size_t maximum)
+{
+    if (0 == maximum || maximum >= result.keys.size()) {
+        return;
+    }
+
+    std::vector<size_t> order(result.keys.size());
+    std::iota(order.begin(), order.end(), 0);
+
+    /* stable_sort なので、出現回数が同じものは初出順のまま残る */
+    std::stable_sort(order.begin(), order.end(), [&](size_t lhs, size_t rhs) {
+        return result.map.at(result.keys.at(lhs)).offsets.size()
+             > result.map.at(result.keys.at(rhs)).offsets.size();
+    });
+    order.resize(maximum);
+    std::sort(order.begin(), order.end());
+
+    candidate_t limited;
+    for (auto &idx : order) {
+        auto &key = result.keys.at(idx);
+        limited.keys.push_back(key);
+        /* offsets は出現回数ぶんあるので move する（残すのは出現の多いフレーズ） */
+        limited.map.insert(std::make_pair(key, std::move(result.map.at(key))));
+    }
+
+    result = std::move(limited);
 }
 
 /**
@@ -233,6 +496,7 @@ inline bool Phrases::_appendMap(std::unordered_map<std::string, phrase_t> &map, 
         phrase_t phrase;
         for (auto &idx : idxs) {
             phrase.words.push_back(line.words.at(idx));
+            phrase.poss.push_back(line.pos.at(idx));
         }
         phrase.key.assign(key);
         phrase.offsets.push_back(line.shift + idxs.at(0));
@@ -283,6 +547,37 @@ inline size_t Phrases::_utf8Strlen(const std::string word)
     }
 
     return length;
+}
+
+/**
+ * utf8コードポイントの取得（pos を次の文字へ進める）
+ *
+ * @access private
+ * @param  const std::string &word
+ * @param  size_t &pos
+ * @return uint32_t
+ */
+inline uint32_t Phrases::_utf8CodePoint(const std::string &word, size_t &pos)
+{
+    uint8_t head = static_cast<uint8_t>(word[pos]);
+    size_t size = (head < 0x80) ? 1 :
+                  (head < 0xE0) ? 2 :
+                  (head < 0xF0) ? 3 : 4;
+
+    /* 途中で切れたバイト列で末尾を踏み越えないよう、残りバイト数で頭打ちにする */
+    if (size > word.size() - pos) {
+        size = word.size() - pos;
+    }
+
+    uint32_t code = (1 == size) ? head :
+                    (2 == size) ? (head & 0x1F) :
+                    (3 == size) ? (head & 0x0F) : (head & 0x07);
+    for (size_t idx = 1; idx < size; idx++) {
+        code = (code << 6) | (static_cast<uint8_t>(word[pos + idx]) & 0x3F);
+    }
+    pos += size;
+
+    return code;
 }
 
 } // namespace croco

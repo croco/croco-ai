@@ -34,9 +34,6 @@ public:
 public:
     std::vector<line_t> parse(std::vector<std::vector<std::string>> &wordLines, std::vector<std::vector<unsigned short>> &posLines);
 
-private:
-    float _getShift(std::vector<line_t> &nodes, size_t range);
-
 }; // class Lines
 
 /**
@@ -59,29 +56,18 @@ inline std::vector<Lines::line_t> Lines::parse(std::vector<std::vector<std::stri
         result.push_back(line);
     }
 
+    /*
+     * shift は「先行行の語数の累積」なので、行ごとに 0..idx-1 を舐め直すと行数 L に
+     * 対して O(L^2) になる。croco-ai#7 で Sentence::parse が行末でも文を切るように
+     * なり L が増える向きなので、累積を持ち回して 1 パスにする
+     */
+    float shift = 0.0;
     for (size_t idx=0; idx < result.size(); idx++) {
-        result.at(idx).shift = _getShift(result, idx);
+        result.at(idx).shift = shift;
+        shift = shift + result.at(idx).words.size();
     }
 
     return result;
-}
-
-/**
- * Shift値の取得　（単語構成サイズ）
- *
- * @access private
- * @param  std::vector<line_t> &nodes
- * @param  size_t range
- * @return float
- */
-inline float Lines::_getShift(std::vector<line_t> &nodes, size_t range)
-{
-    float shift = 0.0;
-     
-    for (size_t idx = 0; idx < range; idx++) {
-        shift = shift + nodes.at(idx).words.size();
-    }
-    return shift;
 }
 
 } // namespace croco

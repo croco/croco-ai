@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 #include <mecab.h>
 
@@ -53,10 +54,12 @@ inline Sentence::Sentences Sentence::parse(std::string text)
 {
     Sentences result;
     std::vector<std::string> lines =  explode(text, '\n');
-    std::vector<std::string> wordRow;
-    std::vector<unsigned short> posRow;
 
     for (auto &line : lines) {
+        /* 行末で必ず flush するので、行をまたいで持ち越す状態は無い */
+        std::vector<std::string> wordRow;
+        std::vector<unsigned short> posRow;
+
         const MeCab::Node* node = _tagger->parseToNode(line.c_str());
         for (; node; node = node->next) {
             if (node->stat != MECAB_BOS_NODE && node->stat != MECAB_EOS_NODE) {
@@ -64,20 +67,25 @@ inline Sentence::Sentences Sentence::parse(std::string text)
                 wordRow.push_back(surface);
                 posRow.push_back(node->posid);
                 if (_isPeriod(node)) {
-                    result.wordLines.push_back(wordRow);
-                    result.posLines.push_back(posRow);
+                    result.wordLines.push_back(std::move(wordRow));
+                    result.posLines.push_back(std::move(posRow));
                     wordRow.clear();
                     posRow.clear();
                 }
             } // if (node->stat != MECAB_BOS_NODE && node->stat != MECAB_EOS_NODE)
         } // for (; node; node = node->next)
+
+        // 行末でも切る。'\n' で分割して行ごとに tagger へ渡している以上、行はすでに
+        // 解析の境界になっている。ここで切らないと wordRow が行をまたいで積み上がり、
+        // 句点で終わらない行（見出しなど）が次の行の本文と 1 センテンスに繋がる。
+        // Phrases が連続する名詞列をフレーズにするため、見出し末尾と本文先頭が
+        // くっついた `勉強コスト独学` のような候補が生まれていた (#7)
+        if (wordRow.size()) {
+            result.wordLines.push_back(std::move(wordRow));
+            result.posLines.push_back(std::move(posRow));
+        }
     }
-    if (wordRow.size()) {
-        result.wordLines.push_back(wordRow);
-        result.posLines.push_back(posRow);
-        wordRow.clear();
-        posRow.clear();
-    }
+
     return result;
 }
 
@@ -123,10 +131,12 @@ inline std::vector<std::vector<std::string>> Sentence::explodeSentence(const std
     std::vector<std::vector<std::string>> result;
 
     std::vector<std::string> lines =  explode(str, '\n');
-    std::vector<std::string> sentence;
     std::string wakati = isWakati ? " ": "";
 
     for (auto &line : lines) {
+        /* parse() と同じく、行末で必ず flush するので持ち越す状態は無い */
+        std::vector<std::string> sentence;
+
         const MeCab::Node* node = _tagger->parseToNode(line.c_str());
         for (; node; node = node->next) {
             if (node->stat != MECAB_BOS_NODE && node->stat != MECAB_EOS_NODE) {
@@ -134,14 +144,16 @@ inline std::vector<std::vector<std::string>> Sentence::explodeSentence(const std
 
                 sentence.push_back(surface);
                 if (_isPeriod(node)) {
-                    result.push_back(sentence);
+                    result.push_back(std::move(sentence));
                     sentence.clear();
                 }
             } // if (node->stat != MECAB_BOS_NODE && node->stat != MECAB_EOS_NODE)
         } // for (; node; node = node->next)
-    }
-    if (sentence.size()) {
-        result.push_back(sentence);
+
+        // parse() と同じ理由で行末でも切る（#7）
+        if (sentence.size()) {
+            result.push_back(std::move(sentence));
+        }
     }
 
     return result;
