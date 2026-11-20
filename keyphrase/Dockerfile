@@ -81,7 +81,7 @@ RUN set -xe \
     && printf 'zend.exception_ignore_args = 1\nfatal_error_backtraces = 0\n' > /etc/php85/conf.d/99-backtrace.ini
 WORKDIR /home/croco/keyphrase
 RUN set -xe \
-    && cmake -B build \
+    && cmake -B build -DPHP_CONFIG=php-config85 \
     && cd build \
     && make -j $(nproc) \
     && make install \
