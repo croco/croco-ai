@@ -12,9 +12,21 @@ set(WARNING_FLAGS "-Wno-int-to-pointer-cast -Wno-implicit-function-declaration -
 set(CMAKE_C_FLAGS "-DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -DPHP_ATOM_INC -DHAVE_CONFIG_H -O3 -funroll-loops")
 set(CMAKE_CXX_FLAGS ${CMAKE_C_FLAGS})
 
-execute_process(COMMAND "php-config84" "--prefix" OUTPUT_VARIABLE PHP_BASE_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND "php-config84" "--include-dir" OUTPUT_VARIABLE PHP_INCLUDE_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND "php-config84" "--extension-dir" OUTPUT_VARIABLE EXTENSION_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+# php-config の名前は PHP のバージョンごとに変わる（php-config84 / php-config85）ため、
+# ビルド側から -DPHP_CONFIG=php-config85 のように渡せるようにする (#102)
+set(PHP_CONFIG "php-config" CACHE STRING "php-config command name")
+
+# execute_process は実行に失敗しても空文字を返すだけなので、ここで止める。
+# 空のまま進むと include_directories が empty-string で落ち、原因が読み取れない
+execute_process(COMMAND "${PHP_CONFIG}" "--prefix"
+    OUTPUT_VARIABLE PHP_BASE_PATH OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE PHP_CONFIG_RESULT)
+if(NOT PHP_CONFIG_RESULT EQUAL 0 OR PHP_BASE_PATH STREQUAL "")
+    message(FATAL_ERROR "${PHP_CONFIG} を実行できません。php-dev を入れるか -DPHP_CONFIG= で名前を指定してください")
+endif()
+
+execute_process(COMMAND "${PHP_CONFIG}" "--include-dir" OUTPUT_VARIABLE PHP_INCLUDE_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "${PHP_CONFIG}" "--extension-dir" OUTPUT_VARIABLE EXTENSION_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 set(COMPILE_DL_CROCO_MECAB 1)
 set(HAVE_CROCO_MECAB 1)

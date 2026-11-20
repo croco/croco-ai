@@ -43,7 +43,7 @@ docker compose exec shell ash
 edit your php.ini and add:
 
 ```
-echo "extension=croco_faiss" > /etc/php84/conf.d/20_faiss.ini
+echo "extension=croco_faiss" > /etc/php85/conf.d/20_faiss.ini
 ```
 
 -----

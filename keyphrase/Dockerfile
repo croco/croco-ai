@@ -68,21 +68,24 @@ FROM ipadic-image AS runtime-image
 COPY --chown=croco:croco src/ /home/croco/keyphrase/
 RUN set -xe \
     && apk update \
-    # php84 は 8.4.28-r0 以上を要求する（2026-11-19 のセキュリティリリース。#10）。
+    # php85 は 8.5.13-r0 以上を要求する（2026-11-19 のセキュリティリリース。#10）。
     # それより古いパッケージしか取れないときはビルドを失敗させ、古い PHP のまま入るのを防ぐ
     && apk add \
-        'php84>=8.4.28-r0' \
-        php84-common \
-        php84-dev \
+        'php85>=8.5.13-r0' \
+        php85-common \
+        php85-dev \
+    # Alpine 3.24 の php85 は /usr/bin/php を自前で持つので、上書きできる形にする
     && cd /usr/bin \
-    && ln -s php84 php
+    && ln -sf php85 php \
+    # 例外・致命的エラーのバックトレースに引数を載せない（CVE-2026-129474 / CVE-2026-129182 の条件を外す）
+    && printf 'zend.exception_ignore_args = 1\nfatal_error_backtraces = 0\n' > /etc/php85/conf.d/99-backtrace.ini
 WORKDIR /home/croco/keyphrase
 RUN set -xe \
-    && cmake -B build \
+    && cmake -B build -DPHP_CONFIG=php-config85 \
     && cd build \
     && make -j $(nproc) \
     && make install \
-    && echo "extension=croco_keyphrase" > /etc/php84/conf.d/20_keyphrase.ini
+    && echo "extension=croco_keyphrase" > /etc/php85/conf.d/20_keyphrase.ini
 USER croco
 CMD [ "bash" ]
 
