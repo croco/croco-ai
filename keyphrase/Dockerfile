@@ -1,4 +1,4 @@
-FROM alpine:3.22 AS base-image
+FROM alpine:3.24 AS base-image
 RUN set -xe \
     && apk update \
     && apk add \
@@ -68,8 +68,10 @@ FROM ipadic-image AS runtime-image
 COPY --chown=croco:croco src/ /home/croco/keyphrase/
 RUN set -xe \
     && apk update \
+    # php84 は 8.4.28-r0 以上を要求する（2026-11-19 のセキュリティリリース。#10）。
+    # それより古いパッケージしか取れないときはビルドを失敗させ、古い PHP のまま入るのを防ぐ
     && apk add \
-        php84 \
+        'php84>=8.4.28-r0' \
         php84-common \
         php84-dev \
     && cd /usr/bin \
